@@ -257,4 +257,8 @@ export class OpenAIProvider implements LLMProvider {
       }
     }
   }
+
+  getModelId(): string {
+    return `openai:${this.model}`
+  }
 }

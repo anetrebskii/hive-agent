@@ -103,6 +103,18 @@ export interface SubAgentConfig {
   llm?: LLMProvider
   /** Override max iterations for this agent */
   maxIterations?: number
+  /**
+   * Input schema for structured parameters passed to this agent.
+   * If defined, the __task__ tool will require these parameters instead of a free-form prompt.
+   * The agent receives these as JSON in its initial message.
+   */
+  inputSchema?: JSONSchema
+  /**
+   * Output schema for structured data returned by this agent.
+   * If defined, the agent should use the __output__ tool to return structured data.
+   * Parent receives: { summary: string, data: <outputSchema> }
+   */
+  outputSchema?: JSONSchema
 }
 
 // ============================================================================
@@ -139,6 +151,12 @@ export interface LLMProvider {
     tools: ToolSchema[],
     options?: LLMOptions
   ): Promise<LLMResponse>
+
+  /**
+   * Get the model identifier for usage tracking.
+   * Format: "provider:model" (e.g., "claude:claude-3-haiku-20240307")
+   */
+  getModelId?(): string
 }
 
 export interface ProgressUpdate {
@@ -205,6 +223,15 @@ export interface HiveConfig {
 
   /** Disable __ask_user__ tool (used for sub-agents that shouldn't pause for input) */
   disableAskUser?: boolean
+
+  /** Trace provider for execution tracing and cost tracking */
+  trace?: import('./trace.js').TraceProvider
+
+  /** Custom model pricing for cost calculation (overrides defaults) */
+  modelPricing?: Record<string, import('./trace.js').ModelPricing>
+
+  /** Agent name for tracing (defaults to 'agent') */
+  agentName?: string
 }
 
 // ============================================================================
@@ -237,6 +264,9 @@ export interface RunOptions {
    * ```
    */
   shouldContinue?: () => Promise<boolean>
+
+  /** @internal Trace builder passed from parent agent */
+  _traceBuilder?: import('./trace.js').TraceBuilder
 }
 
 export interface PendingQuestion {
@@ -273,6 +303,25 @@ export interface AgentResult {
     cacheCreationInputTokens?: number
     cacheReadInputTokens?: number
   }
+
+  /**
+   * Usage breakdown by provider and model.
+   * Key format: "provider:model" (e.g., "claude:claude-3-haiku-20240307")
+   */
+  usageByModel?: Record<string, {
+    inputTokens: number
+    outputTokens: number
+    cacheCreationInputTokens?: number
+    cacheReadInputTokens?: number
+    /** Number of API calls made with this model */
+    calls: number
+  }>
+
+  /**
+   * Execution trace with full hierarchy and cost breakdown.
+   * Only present if a TraceProvider was configured.
+   */
+  trace?: import('./trace.js').Trace
 }
 
 // ============================================================================

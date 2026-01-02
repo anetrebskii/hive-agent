@@ -42,6 +42,9 @@ export interface ExecutorConfig {
 
   /** Async function to check if should continue */
   shouldContinue?: () => Promise<boolean>
+
+  /** Trace builder for execution tracing */
+  traceBuilder?: import('./trace.js').TraceBuilder
 }
 
 /**
@@ -234,6 +237,15 @@ export function cleanupInterruptedHistory(messages: Message[]): Message[] {
 /**
  * Build interrupted result
  */
+/** Usage breakdown by model */
+type UsageByModel = Record<string, {
+  inputTokens: number
+  outputTokens: number
+  cacheCreationInputTokens?: number
+  cacheReadInputTokens?: number
+  calls: number
+}>
+
 function buildInterruptedResult(
   reason: 'aborted' | 'stopped' | 'max_iterations',
   iteration: number,
@@ -241,7 +253,8 @@ function buildInterruptedResult(
   toolCallLogs: ToolCallLog[],
   thinkingBlocks: string[],
   todoManager: TodoManager,
-  usage: { totalInputTokens: number; totalOutputTokens: number; totalCacheCreationTokens: number; totalCacheReadTokens: number }
+  usage: { totalInputTokens: number; totalOutputTokens: number; totalCacheCreationTokens: number; totalCacheReadTokens: number },
+  usageByModel?: UsageByModel
 ): AgentResult {
   const todos = todoManager.getAll()
 
@@ -264,7 +277,8 @@ function buildInterruptedResult(
       totalOutputTokens: usage.totalOutputTokens,
       cacheCreationInputTokens: usage.totalCacheCreationTokens > 0 ? usage.totalCacheCreationTokens : undefined,
       cacheReadInputTokens: usage.totalCacheReadTokens > 0 ? usage.totalCacheReadTokens : undefined
-    }
+    },
+    usageByModel: usageByModel && Object.keys(usageByModel).length > 0 ? usageByModel : undefined
   }
 }
 
@@ -287,7 +301,8 @@ export async function executeLoop(
     reviewManager,
     llmOptions,
     signal,
-    shouldContinue
+    shouldContinue,
+    traceBuilder
   } = config
 
   const messages = [...initialMessages]
@@ -299,6 +314,10 @@ export async function executeLoop(
   let totalOutputTokens = 0
   let totalCacheCreationTokens = 0
   let totalCacheReadTokens = 0
+
+  // Track usage by model
+  const usageByModel: UsageByModel = {}
+  const modelId = llm.getModelId?.() || 'unknown'
 
   for (let iteration = 0; iteration < maxIterations; iteration++) {
     // Check for interruption at start of each iteration
@@ -315,7 +334,8 @@ export async function executeLoop(
         toolCallLogs,
         thinkingBlocks,
         todoManager,
-        { totalInputTokens, totalOutputTokens, totalCacheCreationTokens, totalCacheReadTokens }
+        { totalInputTokens, totalOutputTokens, totalCacheCreationTokens, totalCacheReadTokens },
+        usageByModel
       )
     }
 
@@ -330,22 +350,50 @@ export async function executeLoop(
     // Manage context (truncate if needed)
     const managedMessages = contextManager.manageContext(messages)
 
-    // Call LLM
+    // Call LLM with timing
+    const llmStartTime = Date.now()
     const response = await llm.chat(
       systemPrompt,
       managedMessages,
       toolSchemas,
       llmOptions
     )
+    const llmDurationMs = Date.now() - llmStartTime
 
     // Track usage
     if (response.usage) {
       totalInputTokens += response.usage.inputTokens
       totalOutputTokens += response.usage.outputTokens
+
+      // Track by model
+      if (!usageByModel[modelId]) {
+        usageByModel[modelId] = { inputTokens: 0, outputTokens: 0, calls: 0 }
+      }
+      usageByModel[modelId].inputTokens += response.usage.inputTokens
+      usageByModel[modelId].outputTokens += response.usage.outputTokens
+      usageByModel[modelId].calls += 1
+
+      // Record in trace
+      traceBuilder?.recordLLMCall(
+        modelId,
+        response.usage.inputTokens,
+        response.usage.outputTokens,
+        llmDurationMs,
+        response.cacheUsage?.cacheCreationInputTokens,
+        response.cacheUsage?.cacheReadInputTokens
+      )
     }
     if (response.cacheUsage) {
       totalCacheCreationTokens += response.cacheUsage.cacheCreationInputTokens
       totalCacheReadTokens += response.cacheUsage.cacheReadInputTokens
+
+      // Track cache usage by model
+      if (usageByModel[modelId]) {
+        usageByModel[modelId].cacheCreationInputTokens =
+          (usageByModel[modelId].cacheCreationInputTokens || 0) + response.cacheUsage.cacheCreationInputTokens
+        usageByModel[modelId].cacheReadInputTokens =
+          (usageByModel[modelId].cacheReadInputTokens || 0) + response.cacheUsage.cacheReadInputTokens
+      }
     }
 
     // Collect thinking blocks
@@ -394,7 +442,8 @@ export async function executeLoop(
           totalOutputTokens,
           cacheCreationInputTokens: totalCacheCreationTokens > 0 ? totalCacheCreationTokens : undefined,
           cacheReadInputTokens: totalCacheReadTokens > 0 ? totalCacheReadTokens : undefined
-        }
+        },
+        usageByModel: Object.keys(usageByModel).length > 0 ? usageByModel : undefined
       }
 
       logger?.onComplete?.(result)
@@ -423,7 +472,8 @@ export async function executeLoop(
           toolCallLogs,
           thinkingBlocks,
           todoManager,
-          { totalInputTokens, totalOutputTokens, totalCacheCreationTokens, totalCacheReadTokens }
+          { totalInputTokens, totalOutputTokens, totalCacheCreationTokens, totalCacheReadTokens },
+          usageByModel
         )
       }
 
@@ -448,7 +498,8 @@ export async function executeLoop(
             totalOutputTokens,
             cacheCreationInputTokens: totalCacheCreationTokens > 0 ? totalCacheCreationTokens : undefined,
             cacheReadInputTokens: totalCacheReadTokens > 0 ? totalCacheReadTokens : undefined
-          }
+          },
+          usageByModel: Object.keys(usageByModel).length > 0 ? usageByModel : undefined
         }
       }
 
@@ -479,6 +530,9 @@ export async function executeLoop(
         durationMs
       })
 
+      // Record in trace
+      traceBuilder?.recordToolCall(toolUse.name, toolUse.input, result, durationMs)
+
       toolResults.push({
         type: 'tool_result',
         tool_use_id: toolUse.id,
@@ -504,6 +558,7 @@ export async function executeLoop(
     toolCallLogs,
     thinkingBlocks,
     todoManager,
-    { totalInputTokens, totalOutputTokens, totalCacheCreationTokens, totalCacheReadTokens }
+    { totalInputTokens, totalOutputTokens, totalCacheCreationTokens, totalCacheReadTokens },
+    usageByModel
   )
 }

@@ -15,26 +15,19 @@ import type {
   StopReason
 } from '../../types.js'
 
-export interface CacheConfig {
-  enabled: boolean
-  cacheSystemPrompt?: boolean   // Cache the system prompt (default: true)
-  cacheTools?: boolean          // Cache tool definitions (default: true)
-  cacheHistory?: boolean        // Cache conversation history (default: true)
-}
-
 export interface ClaudeProviderConfig {
   apiKey?: string
   model?: string
   maxTokens?: number
   /** Enable prompt caching to reduce costs */
-  cache?: CacheConfig
+  cache?: boolean
 }
 
 export class ClaudeProvider implements LLMProvider {
   private client: Anthropic
   private model: string
   private maxTokens: number
-  private cacheConfig?: CacheConfig
+  private cache: boolean
 
   constructor(config: ClaudeProviderConfig = {}) {
     this.client = new Anthropic({
@@ -42,7 +35,7 @@ export class ClaudeProvider implements LLMProvider {
     })
     this.model = config.model || 'claude-sonnet-4-20250514'
     this.maxTokens = config.maxTokens || 8192
-    this.cacheConfig = config.cache
+    this.cache = config.cache ?? false
   }
 
   async chat(
@@ -51,12 +44,9 @@ export class ClaudeProvider implements LLMProvider {
     tools: ToolSchema[],
     options: LLMOptions = {}
   ): Promise<LLMResponse> {
-    // Use provider-level cache config
-    const cacheEnabled = this.cacheConfig?.enabled ?? false
-
-    const anthropicMessages = this.convertMessages(messages, cacheEnabled && (this.cacheConfig?.cacheHistory ?? true))
-    const anthropicTools = this.convertTools(tools, cacheEnabled && (this.cacheConfig?.cacheTools ?? true))
-    const systemContent = this.buildSystemContent(systemPrompt, cacheEnabled && (this.cacheConfig?.cacheSystemPrompt ?? true))
+    const anthropicMessages = this.convertMessages(messages, this.cache)
+    const anthropicTools = this.convertTools(tools, this.cache)
+    const systemContent = this.buildSystemContent(systemPrompt, this.cache)
 
     const requestParams: Anthropic.MessageCreateParams = {
       model: options.model || this.model,
@@ -237,5 +227,9 @@ export class ClaudeProvider implements LLMProvider {
       },
       cacheUsage
     }
+  }
+
+  getModelId(): string {
+    return `claude:${this.model}`
   }
 }

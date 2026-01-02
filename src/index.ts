@@ -66,8 +66,7 @@ export type {
 // Providers
 export {
   ClaudeProvider,
-  type ClaudeProviderConfig,
-  type CacheConfig
+  type ClaudeProviderConfig
 } from './providers/llm/claude.js'
 
 export {
@@ -120,3 +119,24 @@ export {
 export {
   cleanupInterruptedHistory
 } from './executor.js'
+
+// Tracing
+export {
+  TraceBuilder,
+  ConsoleTraceProvider,
+  generateTraceId,
+  generateSpanId,
+  calculateCost,
+  DEFAULT_MODEL_PRICING,
+  type TraceProvider,
+  type TraceId,
+  type SpanId,
+  type Trace,
+  type AgentSpan,
+  type TraceEvent,
+  type LLMCallEvent,
+  type ToolCallEvent,
+  type TraceContext,
+  type ModelPricing,
+  type ConsoleTraceConfig
+} from './trace.js'

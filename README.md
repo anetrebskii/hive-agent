@@ -8,9 +8,11 @@ Minimal TypeScript agent framework inspired by Claude Code architecture.
 - **No built-in tools** - You define your own tools
 - **External history** - Accepts/returns conversation history (for Firestore, etc.)
 - **Sub-agents** - Spawn specialized agents for complex tasks
+- **Structured I/O** - Type-safe input/output schemas for sub-agents
 - **Multi-provider** - Claude and OpenAI support, easily extensible
 - **Interactive** - Built-in `__ask_user__` tool for clarifying questions
 - **Progress tracking** - Todo lists and real-time progress callbacks
+- **Execution tracing** - Full hierarchy tracking with cost breakdown
 - **Prompt caching** - Claude prompt caching for cost reduction
 
 ## Installation
@@ -116,6 +118,176 @@ const agent = new Hive({
   agents: [fastAgent],
   llm: claudeProvider  // Main agent uses Claude
 })
+```
+
+### Structured Sub-Agents
+
+Define input/output schemas for type-safe, cost-efficient sub-agent communication:
+
+```typescript
+import type { SubAgentConfig } from '@alexnetrebskii/hive-agent'
+
+const nutritionAgent: SubAgentConfig = {
+  name: 'nutrition_counter',
+  description: 'Log food and calculate nutrition values',
+
+  // Input schema - parent provides structured parameters
+  inputSchema: {
+    type: 'object',
+    properties: {
+      food: { type: 'string', description: 'Food item to log' },
+      portionGrams: { type: 'number', description: 'Portion size in grams' },
+      meal: { type: 'string', description: 'Meal type: breakfast, lunch, dinner, snack' }
+    },
+    required: ['food', 'portionGrams', 'meal']
+  },
+
+  // Output schema - sub-agent returns structured data via __output__ tool
+  outputSchema: {
+    type: 'object',
+    properties: {
+      logged: { type: 'boolean', description: 'Whether food was logged' },
+      calories: { type: 'number', description: 'Total calories' },
+      protein: { type: 'number', description: 'Protein in grams' }
+    },
+    required: ['logged', 'calories']
+  },
+
+  systemPrompt: `You log food nutrition. Use __output__ to return results.`,
+  tools: [searchFoodTool, logMealTool]
+}
+
+const agent = new Hive({
+  systemPrompt: 'You are a nutrition consultant.',
+  tools: [],
+  agents: [nutritionAgent],
+  llm: provider
+})
+
+// Main agent calls sub-agent with structured input:
+// __task__({ agent: "nutrition_counter", food: "pasta", portionGrams: 250, meal: "lunch" })
+//
+// Sub-agent returns structured output:
+// { summary: "Logged 250g pasta...", data: { logged: true, calories: 350, protein: 12 } }
+```
+
+## Execution Tracing
+
+Track the full execution hierarchy with cost breakdown:
+
+```typescript
+import { Hive, ClaudeProvider, ConsoleTraceProvider } from '@alexnetrebskii/hive-agent'
+
+const agent = new Hive({
+  systemPrompt: '...',
+  tools: [...],
+  agents: [...],
+  llm: new ClaudeProvider({ apiKey: '...' }),
+  trace: new ConsoleTraceProvider({ showCosts: true }),
+  agentName: 'my_agent'
+})
+
+const result = await agent.run('Do something complex')
+
+// ConsoleTraceProvider outputs execution tree to console:
+// [TRACE START] trace_abc123 - my_agent
+// [AGENT START] my_agent
+// [LLM] claude:claude-sonnet-4-20250514 - 1250 in / 89 out - $0.0042
+// [TOOL] search_food (125ms)
+// [AGENT START] nutrition_counter
+// [LLM] claude:claude-3-haiku-20240307 - 800 in / 45 out - $0.0003
+// [TOOL] log_meal (52ms)
+// [AGENT END] nutrition_counter - complete
+// [AGENT END] my_agent - complete
+// [TRACE END] trace_abc123 - 2.3s - $0.0045
+```
+
+### Custom Trace Provider
+
+Implement `TraceProvider` for custom logging (database, observability platforms):
+
+```typescript
+import type { TraceProvider, Trace, AgentSpan, LLMCallEvent, ToolCallEvent } from '@alexnetrebskii/hive-agent'
+
+class DatadogTraceProvider implements TraceProvider {
+  onTraceStart(trace: Trace): void {
+    // Start a Datadog trace
+  }
+
+  onTraceEnd(trace: Trace): void {
+    // End trace, record total cost
+    datadogClient.gauge('agent.cost', trace.totalCost)
+  }
+
+  onAgentStart(span: AgentSpan, trace: Trace): void {
+    // Start agent span
+  }
+
+  onAgentEnd(span: AgentSpan, trace: Trace): void {
+    // End agent span with status
+  }
+
+  onLLMCall(event: LLMCallEvent, span: AgentSpan, trace: Trace): void {
+    // Record LLM call metrics
+    datadogClient.increment('agent.llm_calls', { model: event.modelId })
+  }
+
+  onToolCall(event: ToolCallEvent, span: AgentSpan, trace: Trace): void {
+    // Record tool call metrics
+    datadogClient.histogram('agent.tool_duration', event.durationMs)
+  }
+}
+```
+
+### Accessing Trace Data
+
+The trace is available in the result for programmatic access:
+
+```typescript
+const result = await agent.run(message)
+
+if (result.trace) {
+  console.log(`Total cost: $${result.trace.totalCost.toFixed(4)}`)
+  console.log(`Duration: ${result.trace.durationMs}ms`)
+
+  // Walk the execution tree
+  function printSpan(span: AgentSpan, depth = 0) {
+    const indent = '  '.repeat(depth)
+    console.log(`${indent}${span.agentName}: ${span.events.length} events`)
+    for (const child of span.children) {
+      printSpan(child, depth + 1)
+    }
+  }
+  printSpan(result.trace.rootSpan)
+}
+```
+
+### Usage by Model
+
+Track token usage broken down by provider and model:
+
+```typescript
+const result = await agent.run(message)
+
+// Aggregated usage by model (includes sub-agents)
+if (result.usageByModel) {
+  for (const [modelId, usage] of Object.entries(result.usageByModel)) {
+    console.log(`${modelId}:`)
+    console.log(`  ${usage.inputTokens} input / ${usage.outputTokens} output`)
+    console.log(`  ${usage.calls} API calls`)
+    if (usage.cacheReadInputTokens) {
+      console.log(`  ${usage.cacheReadInputTokens} tokens from cache`)
+    }
+  }
+}
+// Output:
+// claude:claude-sonnet-4-20250514:
+//   2500 input / 180 output
+//   2 API calls
+// claude:claude-3-haiku-20240307:
+//   800 input / 45 output
+//   1 API calls
+//   650 tokens from cache
 ```
 
 ## Conversation History
@@ -360,19 +532,12 @@ const agent = new Hive({
 
 Reduce costs by up to 90% with Claude's prompt caching. Cached tokens are billed at 1/10th the price of regular input tokens.
 
-Configure caching at the provider level:
-
 ```typescript
-import { ClaudeProvider, type CacheConfig } from '@alexnetrebskii/hive-agent'
+import { ClaudeProvider } from '@alexnetrebskii/hive-agent'
 
 const provider = new ClaudeProvider({
   apiKey: process.env.ANTHROPIC_API_KEY,
-  cache: {
-    enabled: true,
-    cacheSystemPrompt: true,  // Cache system prompt (default: true)
-    cacheTools: true,         // Cache tool definitions (default: true)
-    cacheHistory: true        // Cache conversation history (default: true)
-  }
+  cache: true  // Enable caching for system prompt, tools, and history
 })
 
 const agent = new Hive({
@@ -396,14 +561,7 @@ if (result.usage) {
 - **Subsequent requests**: Tokens are read from cache (`cacheReadInputTokens`) at 1/10th cost
 - **Cache TTL**: 5 minutes (automatically extended on each hit)
 
-### Cache Breakpoints
-
-The framework automatically places cache breakpoints at optimal positions:
-- End of system prompt
-- End of tool definitions
-- Last user message in conversation history
-
-This ensures maximum cache reuse across conversation turns.
+Cache breakpoints are automatically placed at optimal positions (system prompt, tools, last user message).
 
 ## Configuration
 
@@ -425,6 +583,23 @@ interface HiveConfig {
   thinkingBudget?: number
 
   review?: ReviewConfig
+
+  // Tracing
+  trace?: TraceProvider         // Enable execution tracing
+  agentName?: string            // Name for root agent span (default: 'agent')
+  modelPricing?: Record<string, ModelPricing>  // Custom pricing overrides
+}
+
+interface SubAgentConfig {
+  name: string
+  description: string
+  systemPrompt: string
+  tools: Tool[]
+  model?: string                // Override model for this agent
+  llm?: LLMProvider             // Override provider for this agent
+  maxIterations?: number        // Override max iterations
+  inputSchema?: JSONSchema      // Structured input parameters
+  outputSchema?: JSONSchema     // Structured output data
 }
 ```
 
@@ -439,12 +614,7 @@ const provider = new ClaudeProvider({
   apiKey: process.env.ANTHROPIC_API_KEY,
   model: 'claude-sonnet-4-20250514',  // Default
   maxTokens: 8192,
-  cache: {                            // Optional: enable prompt caching
-    enabled: true,
-    cacheSystemPrompt: true,
-    cacheTools: true,
-    cacheHistory: true
-  }
+  cache: true                         // Enable prompt caching
 })
 ```
 
@@ -484,6 +654,14 @@ interface AgentResult {
     cacheCreationInputTokens?: number
     cacheReadInputTokens?: number
   }
+  usageByModel?: Record<string, {  // Usage by provider:model
+    inputTokens: number
+    outputTokens: number
+    cacheCreationInputTokens?: number
+    cacheReadInputTokens?: number
+    calls: number
+  }>
+  trace?: Trace                 // Execution trace (if TraceProvider configured)
 }
 ```
 

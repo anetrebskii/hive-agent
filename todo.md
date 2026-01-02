@@ -8,6 +8,6 @@
 - [x] Create readme for project
 - [x] Create examples MD document
 - [x] Prepare CI/CD for deploying to npm
-- [ ] Review prompts and check how else it should improve SDK? What other features should appear based on the prompts?
-- [ ] 
+- [x] Review prompts and check how else it should improve SDK? What other features should appear based on the prompts?
+- [x] Sub-agents should not user main agent history, and vise versa. 
 
