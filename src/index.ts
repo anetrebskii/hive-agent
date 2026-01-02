@@ -46,6 +46,7 @@ export type {
   StopReason,
   LogProvider,
   RepositoryProvider,
+  ProgressUpdate,
 
   // Cache types
   CacheConfig,
@@ -68,6 +69,11 @@ export {
   ClaudeProvider,
   type ClaudeProviderConfig
 } from './providers/llm/claude.js'
+
+export {
+  OpenAIProvider,
+  type OpenAIProviderConfig
+} from './providers/llm/openai.js'
 
 export {
   ConsoleLogger,

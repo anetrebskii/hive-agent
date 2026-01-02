@@ -1,2 +1,13 @@
-- Support caching
-- Return information about token usage for each model, including cached ones
+- [x] Add To Do list
+- [x] Add support for review to improve quality
+- [x] Support caching
+- [x] Return information about token usage for each model, including cached ones
+- [x] Create demo terminal project consultant of eating
+- [x] Each agent can use own model settings. Also, different providers. For instance, OpenAI
+- [x] Rename project to HiveAgent in projects.json
+- [x] Create readme for project
+- [x] Create examples MD document
+- [x] Prepare CI/CD for deploying to npm
+- [ ] Review prompts and check how else it should improve SDK? What other features should appear based on the prompts?
+- [ ] 
+

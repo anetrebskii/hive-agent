@@ -5,6 +5,7 @@
 // LLM Providers
 export { LLMProvider, LLMResponse, LLMOptions } from './llm/base.js'
 export { ClaudeProvider, ClaudeProviderConfig } from './llm/claude.js'
+export { OpenAIProvider, OpenAIProviderConfig } from './llm/openai.js'
 
 // Logger Providers
 export { LogProvider } from './logger/base.js'

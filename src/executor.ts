@@ -36,6 +36,12 @@ export interface ExecutorConfig {
   todoManager: TodoManager
   reviewManager?: ReviewManager
   llmOptions?: LLMOptions
+
+  /** AbortSignal for cancellation */
+  signal?: AbortSignal
+
+  /** Async function to check if should continue */
+  shouldContinue?: () => Promise<boolean>
 }
 
 /**
@@ -79,11 +85,61 @@ async function executeTool(
 ): Promise<{ result: ToolResult; durationMs: number }> {
   const startTime = Date.now()
 
+  // Progress: tool starting (with context for specific tools)
+  let progressMessage = `Running ${tool.name}...`
+  if (tool.name === '__todo__') {
+    const action = (params as { action?: string }).action
+    const items = (params as { items?: string[] }).items
+    if (action === 'set' && items) {
+      progressMessage = `Creating ${items.length} tasks...`
+    } else if (action === 'complete') {
+      progressMessage = `Marking task complete...`
+    } else if (action === 'list') {
+      progressMessage = `Checking tasks...`
+    }
+  } else if (tool.name === '__task__') {
+    const agent = (params as { agent?: string }).agent
+    progressMessage = `Delegating to ${agent}...`
+  } else if (tool.name === 'search_food') {
+    const query = (params as { query?: string }).query
+    progressMessage = `Searching for "${query}"...`
+  } else if (tool.name === 'log_meal') {
+    const food = (params as { food?: string }).food
+    progressMessage = `Logging ${food}...`
+  }
+
+  logger?.onProgress?.({
+    type: 'tool_start',
+    message: progressMessage,
+    details: { toolName: tool.name }
+  })
+
   logger?.onToolCall?.(tool.name, params)
 
   try {
     const result = await tool.execute(params, context)
     const durationMs = Date.now() - startTime
+
+    // Progress: tool completed (with result context)
+    let completionMessage = `${tool.name} completed`
+    if (tool.name === '__todo__' && result.success && result.data) {
+      const data = result.data as { message?: string; currentTask?: string }
+      if (data.message) {
+        completionMessage = data.message
+      }
+    } else if (tool.name === 'search_food' && result.success && result.data) {
+      const data = result.data as { count?: number }
+      completionMessage = `Found ${data.count || 0} results`
+    } else if (tool.name === 'log_meal' && result.success && result.data) {
+      const data = result.data as { message?: string }
+      completionMessage = data.message || 'Meal logged'
+    }
+
+    logger?.onProgress?.({
+      type: 'tool_end',
+      message: completionMessage,
+      details: { toolName: tool.name, duration: durationMs, success: result.success }
+    })
 
     logger?.onToolResult?.(tool.name, result, durationMs)
 
@@ -95,9 +151,120 @@ async function executeTool(
       error: error instanceof Error ? error.message : String(error)
     }
 
+    // Progress: tool failed
+    logger?.onProgress?.({
+      type: 'tool_end',
+      message: `${tool.name} failed`,
+      details: { toolName: tool.name, duration: durationMs, success: false }
+    })
+
     logger?.onToolResult?.(tool.name, result, durationMs)
 
     return { result, durationMs }
+  }
+}
+
+/**
+ * Check if execution should be interrupted
+ */
+async function checkInterruption(
+  signal?: AbortSignal,
+  shouldContinue?: () => Promise<boolean>
+): Promise<'aborted' | 'stopped' | null> {
+  // Check AbortSignal
+  if (signal?.aborted) {
+    return 'aborted'
+  }
+
+  // Check shouldContinue callback
+  if (shouldContinue) {
+    const continueExecution = await shouldContinue()
+    if (!continueExecution) {
+      return 'stopped'
+    }
+  }
+
+  return null
+}
+
+/**
+ * Clean up history after interruption
+ * If the last assistant message has tool_use blocks without corresponding tool_results,
+ * add cancelled tool_results to make the history valid for the next API call.
+ */
+function cleanupInterruptedHistory(messages: Message[]): Message[] {
+  if (messages.length === 0) return messages
+
+  const lastMessage = messages[messages.length - 1]
+
+  // Check if last message is assistant with tool_use blocks
+  if (lastMessage.role === 'assistant' && Array.isArray(lastMessage.content)) {
+    const toolUseBlocks = lastMessage.content.filter(
+      (block): block is ToolUseBlock => block.type === 'tool_use'
+    )
+
+    if (toolUseBlocks.length > 0) {
+      // Check if there's already a user message with tool_results after this
+      // (there shouldn't be if we're interrupted, but check anyway)
+      const needsToolResults = true // We're interrupted, so we need to add them
+
+      if (needsToolResults) {
+        // Add cancelled tool_results for all tool_use blocks
+        const cancelledResults: ToolResultBlock[] = toolUseBlocks.map(toolUse => ({
+          type: 'tool_result' as const,
+          tool_use_id: toolUse.id,
+          content: JSON.stringify({
+            success: false,
+            error: 'Operation cancelled by user'
+          }),
+          is_error: true
+        }))
+
+        return [
+          ...messages,
+          { role: 'user' as const, content: cancelledResults }
+        ]
+      }
+    }
+  }
+
+  return messages
+}
+
+/**
+ * Build interrupted result
+ */
+function buildInterruptedResult(
+  reason: 'aborted' | 'stopped' | 'max_iterations',
+  iteration: number,
+  messages: Message[],
+  toolCallLogs: ToolCallLog[],
+  thinkingBlocks: string[],
+  todoManager: TodoManager,
+  usage: { totalInputTokens: number; totalOutputTokens: number; totalCacheCreationTokens: number; totalCacheReadTokens: number }
+): AgentResult {
+  const todos = todoManager.getAll()
+
+  // Clean up history to ensure it's valid for continuation
+  const cleanedHistory = cleanupInterruptedHistory(messages)
+
+  return {
+    response: '',
+    history: cleanedHistory,
+    toolCalls: toolCallLogs,
+    thinking: thinkingBlocks.length > 0 ? thinkingBlocks : undefined,
+    todos: todos.length > 0 ? todos : undefined,
+    status: 'interrupted',
+    interrupted: {
+      reason,
+      iterationsCompleted: iteration
+    },
+    usage: {
+      totalInputTokens: usage.totalInputTokens,
+      totalOutputTokens: usage.totalOutputTokens,
+      cacheCreationInputTokens: usage.totalCacheCreationTokens > 0 ? usage.totalCacheCreationTokens : undefined,
+      cacheReadInputTokens: usage.totalCacheReadTokens > 0 ? usage.totalCacheReadTokens : undefined
+    }
   }
 }
 
@@ -118,7 +285,9 @@ export async function executeLoop(
     contextManager,
     todoManager,
     reviewManager,
-    llmOptions
+    llmOptions,
+    signal,
+    shouldContinue
   } = config
 
   const messages = [...initialMessages]
@@ -132,7 +301,31 @@ export async function executeLoop(
   let totalCacheReadTokens = 0
 
   for (let iteration = 0; iteration < maxIterations; iteration++) {
+    // Check for interruption at start of each iteration
+    const interruptReason = await checkInterruption(signal, shouldContinue)
+    if (interruptReason) {
+      logger?.onProgress?.({
+        type: 'status',
+        message: `Interrupted: ${interruptReason}`
+      })
+      return buildInterruptedResult(
+        interruptReason,
+        iteration,
+        messages,
+        toolCallLogs,
+        thinkingBlocks,
+        todoManager,
+        { totalInputTokens, totalOutputTokens, totalCacheCreationTokens, totalCacheReadTokens }
+      )
+    }
+
     logger?.onIteration?.(iteration, messages.length)
+
+    // Progress: thinking
+    logger?.onProgress?.({
+      type: 'thinking',
+      message: iteration === 0 ? 'Thinking...' : 'Processing...'
+    })
 
     // Manage context (truncate if needed)
     const managedMessages = contextManager.manageContext(messages)
@@ -164,6 +357,29 @@ export async function executeLoop(
     // Check if done (no tool use)
     if (response.stopReason !== 'tool_use') {
       const todos = todoManager.getAll()
+      const incompleteTodos = todos.filter(t => t.status !== 'completed')
+
+      // If there are incomplete todos, force the agent to continue working
+      if (incompleteTodos.length > 0) {
+        logger?.onProgress?.({
+          type: 'status',
+          message: `${incompleteTodos.length} tasks remaining, continuing...`
+        })
+
+        // Add a reminder to continue working on todos
+        const reminderContent = `You have ${incompleteTodos.length} incomplete task(s) in your todo list:\n${
+          incompleteTodos.map(t => `- ${t.status === 'in_progress' ? '[IN PROGRESS] ' : ''}${t.content}`).join('\n')
+        }\n\nYou MUST continue working on these tasks. Use the __todo__ tool with action "complete" after finishing each task. Do not respond to the user until all tasks are completed.`
+
+        messages.push({
+          role: 'user',
+          content: reminderContent
+        })
+
+        // Continue the loop instead of returning
+        continue
+      }
+
       const review = reviewManager?.getCurrentReview()
       const result: AgentResult = {
         response: extractText(response.content),
@@ -193,6 +409,24 @@ export async function executeLoop(
     const toolResults: ToolResultBlock[] = []
 
     for (const toolUse of toolUseBlocks) {
+      // Check for interruption between tool calls
+      const toolInterruptReason = await checkInterruption(signal, shouldContinue)
+      if (toolInterruptReason) {
+        logger?.onProgress?.({
+          type: 'status',
+          message: `Interrupted between tools: ${toolInterruptReason}`
+        })
+        return buildInterruptedResult(
+          toolInterruptReason,
+          iteration,
+          messages,
+          toolCallLogs,
+          thinkingBlocks,
+          todoManager,
+          { totalInputTokens, totalOutputTokens, totalCacheCreationTokens, totalCacheReadTokens }
+        )
+      }
+
       // Handle ask_user tool specially
       if (toolUse.name === ASK_USER_TOOL_NAME) {
         const pendingQuestion: PendingQuestion = {
@@ -257,5 +491,19 @@ export async function executeLoop(
     messages.push({ role: 'user', content: toolResults })
   }
 
-  throw new Error(`Max iterations (${maxIterations}) reached`)
+  // Max iterations reached - return as interrupted instead of throwing
+  logger?.onProgress?.({
+    type: 'status',
+    message: `Max iterations (${maxIterations}) reached`
+  })
+
+  return buildInterruptedResult(
+    'max_iterations',
+    maxIterations,
+    messages,
+    toolCallLogs,
+    thinkingBlocks,
+    todoManager,
+    { totalInputTokens, totalOutputTokens, totalCacheCreationTokens, totalCacheReadTokens }
+  )
 }

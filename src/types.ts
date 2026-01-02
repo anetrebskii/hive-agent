@@ -97,7 +97,12 @@ export interface SubAgentConfig {
   description: string
   systemPrompt: string
   tools: Tool[]
+  /** Override model for this agent (e.g., 'gpt-4o', 'claude-3-haiku') */
   model?: string
+  /** Override LLM provider for this agent (use different provider than parent) */
+  llm?: LLMProvider
+  /** Override max iterations for this agent */
+  maxIterations?: number
 }
 
 // ============================================================================
@@ -144,6 +149,17 @@ export interface LLMProvider {
   ): Promise<LLMResponse>
 }
 
+export interface ProgressUpdate {
+  type: 'thinking' | 'tool_start' | 'tool_end' | 'sub_agent_start' | 'sub_agent_end' | 'status'
+  message: string
+  details?: {
+    toolName?: string
+    agentName?: string
+    duration?: number
+    success?: boolean
+  }
+}
+
 export interface LogProvider {
   debug(message: string, data?: unknown): void
   info(message: string, data?: unknown): void
@@ -154,6 +170,9 @@ export interface LogProvider {
   onToolResult?(toolName: string, result: ToolResult, durationMs: number): void
   onIteration?(iteration: number, messageCount: number): void
   onComplete?(result: AgentResult): void
+
+  /** Called with progress updates for real-time UI feedback */
+  onProgress?(update: ProgressUpdate): void
 }
 
 export interface RepositoryProvider {
@@ -191,6 +210,9 @@ export interface HiveConfig {
   thinkingBudget?: number
 
   review?: ReviewConfig
+
+  /** Disable __ask_user__ tool (used for sub-agents that shouldn't pause for input) */
+  disableAskUser?: boolean
 }
 
 // ============================================================================
@@ -202,6 +224,27 @@ export interface RunOptions {
   userId?: string
   metadata?: Record<string, unknown>
   history?: Message[]
+
+  /**
+   * AbortSignal for cancellation (e.g., from AbortController)
+   * When aborted, agent stops and returns partial results
+   */
+  signal?: AbortSignal
+
+  /**
+   * Async function to check if agent should continue
+   * Called before each iteration and between tool calls
+   * Return false to stop execution
+   *
+   * Example (Firestore):
+   * ```typescript
+   * shouldContinue: async () => {
+   *   const doc = await db.doc(`tasks/${taskId}`).get()
+   *   return doc.data()?.status !== 'stopped'
+   * }
+   * ```
+   */
+  shouldContinue?: () => Promise<boolean>
 }
 
 export interface PendingQuestion {
@@ -209,7 +252,7 @@ export interface PendingQuestion {
   options?: string[]
 }
 
-export type AgentStatus = 'complete' | 'needs_input'
+export type AgentStatus = 'complete' | 'needs_input' | 'interrupted'
 
 export interface AgentResult {
   response: string
@@ -220,6 +263,18 @@ export interface AgentResult {
   todos?: TodoItem[]
   review?: ReviewResult
   status: AgentStatus
+
+  /**
+   * Present when status is 'interrupted'
+   * Contains partial work that can be continued or discarded
+   */
+  interrupted?: {
+    /** Reason for interruption */
+    reason: 'aborted' | 'stopped' | 'max_iterations'
+    /** Number of iterations completed before interruption */
+    iterationsCompleted: number
+  }
+
   usage?: {
     totalInputTokens: number
     totalOutputTokens: number
@@ -237,6 +292,8 @@ export type TodoStatus = 'pending' | 'in_progress' | 'completed'
 export interface TodoItem {
   id: string
   content: string
+  /** Present continuous form shown when task is in_progress (e.g., "Running tests") */
+  activeForm?: string
   status: TodoStatus
   createdAt: number
   completedAt?: number

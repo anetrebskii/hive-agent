@@ -96,18 +96,68 @@ Usage:
         return { success: false, error: `Unknown agent: ${agentName}` }
       }
 
+      // Log sub-agent start
+      hive.config.logger?.info(`[Sub-Agent: ${agentName}] Starting...`)
+      hive.config.logger?.info(`[Sub-Agent: ${agentName}] Task: ${prompt.slice(0, 100)}${prompt.length > 100 ? '...' : ''}`)
+
+      // Progress: sub-agent starting
+      hive.config.logger?.onProgress?.({
+        type: 'sub_agent_start',
+        message: `Starting ${agentName}...`,
+        details: { agentName }
+      })
+
       try {
+        // Create a wrapper logger that prefixes sub-agent logs
+        const subLogger = hive.config.logger ? {
+          ...hive.config.logger,
+          debug: (msg: string, data?: unknown) => hive.config.logger?.debug(`[${agentName}] ${msg}`, data),
+          info: (msg: string, data?: unknown) => hive.config.logger?.info(`[${agentName}] ${msg}`, data),
+          warn: (msg: string, data?: unknown) => hive.config.logger?.warn(`[${agentName}] ${msg}`, data),
+          error: (msg: string, data?: unknown) => hive.config.logger?.error(`[${agentName}] ${msg}`, data),
+          onToolCall: (toolName: string, params: unknown) => {
+            hive.config.logger?.info(`[${agentName}] Tool: ${toolName}`)
+            hive.config.logger?.onToolCall?.(toolName, params)
+          },
+          onToolResult: (toolName: string, result: import('./types.js').ToolResult, durationMs: number) => {
+            const status = result.success ? 'OK' : 'ERROR'
+            hive.config.logger?.info(`[${agentName}] Tool ${toolName}: ${status} (${durationMs}ms)`)
+            hive.config.logger?.onToolResult?.(toolName, result, durationMs)
+          },
+          onProgress: (update: import('./types.js').ProgressUpdate) => {
+            // Prefix sub-agent progress messages
+            hive.config.logger?.onProgress?.({
+              ...update,
+              message: `[${agentName}] ${update.message}`
+            })
+          }
+        } : undefined
+
+        // Use agent-specific LLM/model or fall back to parent's
+        const subLlm = agentConfig.llm || hive.config.llm
+
         const subHive = new Hive({
           systemPrompt: agentConfig.systemPrompt,
           tools: agentConfig.tools,
-          llm: hive.config.llm,
-          logger: hive.config.logger,
-          maxIterations: hive.config.maxIterations,
+          llm: subLlm,
+          logger: subLogger,
+          maxIterations: agentConfig.maxIterations || hive.config.maxIterations,
           thinkingMode: hive.config.thinkingMode,
-          thinkingBudget: hive.config.thinkingBudget
+          thinkingBudget: hive.config.thinkingBudget,
+          disableAskUser: true  // Sub-agents return questions as text, not via __ask_user__
         })
 
         const result = await subHive.run(prompt)
+
+        // Log sub-agent completion
+        hive.config.logger?.info(`[Sub-Agent: ${agentName}] Completed (${result.toolCalls.length} tool calls)`)
+
+        // Progress: sub-agent completed
+        hive.config.logger?.onProgress?.({
+          type: 'sub_agent_end',
+          message: `${agentName} completed`,
+          details: { agentName, success: true }
+        })
 
         if (result.status === 'needs_input') {
           return {
@@ -119,6 +169,15 @@ Usage:
 
         return { success: true, data: result.response }
       } catch (error) {
+        hive.config.logger?.error(`[Sub-Agent: ${agentName}] Failed: ${error instanceof Error ? error.message : String(error)}`)
+
+        // Progress: sub-agent failed
+        hive.config.logger?.onProgress?.({
+          type: 'sub_agent_end',
+          message: `${agentName} failed`,
+          details: { agentName, success: false }
+        })
+
         return {
           success: false,
           error: error instanceof Error ? error.message : String(error)
@@ -150,10 +209,12 @@ export class Hive {
     )
 
     // Build tools list with internal tools (todo tool added per-run)
-    this.tools = [
-      ...config.tools,
-      createAskUserTool()
-    ]
+    this.tools = [...config.tools]
+
+    // Add __ask_user__ tool unless disabled (sub-agents shouldn't use it)
+    if (!config.disableAskUser) {
+      this.tools.push(createAskUserTool())
+    }
 
     // Add __task__ tool if sub-agents are defined
     if (config.agents && config.agents.length > 0) {
@@ -181,7 +242,7 @@ export class Hive {
    * Run the agent with a user message
    */
   async run(message: string, options: RunOptions = {}): Promise<AgentResult> {
-    const { conversationId, userId, metadata, history: providedHistory } = options
+    const { conversationId, userId, metadata, history: providedHistory, signal, shouldContinue } = options
 
     // Load history from repository or use provided
     let history: Message[] = []
@@ -192,11 +253,34 @@ export class Hive {
       history = await this.config.repository.getHistory(conversationId)
     }
 
-    // Add user message to history
-    const messages: Message[] = [
-      ...history,
-      { role: 'user', content: message }
-    ]
+    // Check if last message was an __ask_user__ tool call (needs tool_result)
+    const messages: Message[] = [...history]
+    const lastMessage = messages[messages.length - 1]
+
+    if (lastMessage?.role === 'assistant' && Array.isArray(lastMessage.content)) {
+      const askUserToolUse = lastMessage.content.find(
+        (block): block is import('./types.js').ToolUseBlock =>
+          block.type === 'tool_use' && block.name === '__ask_user__'
+      )
+
+      if (askUserToolUse) {
+        // Add tool_result for the __ask_user__ call with user's response
+        messages.push({
+          role: 'user',
+          content: [{
+            type: 'tool_result',
+            tool_use_id: askUserToolUse.id,
+            content: JSON.stringify({ success: true, data: { answer: message } })
+          }]
+        })
+      } else {
+        // Normal user message
+        messages.push({ role: 'user', content: message })
+      }
+    } else {
+      // Normal user message
+      messages.push({ role: 'user', content: message })
+    }
 
     // Create todo manager for this run
     const todoManager = new TodoManager()
@@ -228,7 +312,9 @@ export class Hive {
         llmOptions: {
           thinkingMode: this.config.thinkingMode,
           thinkingBudget: this.config.thinkingBudget
-        }
+        },
+        signal,
+        shouldContinue
       },
       messages,
       toolContext

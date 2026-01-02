@@ -30,7 +30,11 @@ export function formatTodoList(todos: TodoItem[]): string {
   return todos
     .map((todo, index) => {
       const emoji = statusEmoji[todo.status]
-      return `${index + 1}. ${emoji} ${todo.content}`
+      // Show activeForm when in_progress, otherwise show content
+      const label = todo.status === 'in_progress' && todo.activeForm
+        ? todo.activeForm
+        : todo.content
+      return `${index + 1}. ${emoji} ${label}`
     })
     .join('\n')
 }
@@ -60,10 +64,11 @@ export class TodoManager {
   /**
    * Add a new todo item
    */
-  add(content: string): TodoItem {
+  add(content: string, activeForm?: string): TodoItem {
     const item: TodoItem = {
       id: generateId(),
       content,
+      activeForm,
       status: 'pending',
       createdAt: Date.now()
     }
@@ -74,7 +79,7 @@ export class TodoManager {
   /**
    * Set multiple todos at once (replaces existing)
    */
-  setAll(todos: Array<{ content: string; status?: TodoStatus }>): TodoItem[] {
+  setAll(todos: Array<{ content: string; activeForm?: string; status?: TodoStatus }>): TodoItem[] {
     this.items.clear()
     this.currentTaskId = undefined
 
@@ -82,6 +87,7 @@ export class TodoManager {
       const item: TodoItem = {
         id: generateId(),
         content: todo.content,
+        activeForm: todo.activeForm,
         status: todo.status || 'pending',
         createdAt: Date.now()
       }
@@ -201,15 +207,21 @@ Actions:
 - "complete": Mark the current task as done and move to next
 - "list": Show current todo list status
 
+Items format:
+Each item should have:
+- content: What needs to be done (imperative form, e.g., "Run tests")
+- activeForm: What's happening (present continuous, e.g., "Running tests")
+
 Examples:
-- Set todos: { "action": "set", "items": ["Research the topic", "Write the code", "Test the implementation"] }
+- Set todos: { "action": "set", "items": [{"content": "Run tests", "activeForm": "Running tests"}, {"content": "Build project", "activeForm": "Building project"}] }
 - Complete current: { "action": "complete" }
 - Show list: { "action": "list" }
 
 Best practices:
 - Create a todo list at the start of complex tasks
 - Complete each task before moving to the next
-- Keep task descriptions concise but clear`,
+- Keep task descriptions concise but clear
+- Use activeForm to show dynamic status during execution`,
 
     parameters: {
       type: 'object',
@@ -228,23 +240,58 @@ Best practices:
     },
 
     execute: async (params) => {
-      const { action, items } = params as { action: string; items?: string[] }
+      const { action, items: rawItems } = params as { action: string; items?: unknown }
+
+      // Parse items - could be JSON string, array of strings, or array of objects
+      type TodoInput = { content: string; activeForm?: string }
+      let items: TodoInput[] | undefined
+
+      if (rawItems) {
+        let parsed: unknown = rawItems
+
+        // Parse JSON string if needed
+        if (typeof rawItems === 'string') {
+          try {
+            parsed = JSON.parse(rawItems)
+          } catch {
+            // Single string item
+            parsed = [rawItems]
+          }
+        }
+
+        // Convert to TodoInput array
+        if (Array.isArray(parsed)) {
+          items = parsed.map(item => {
+            if (typeof item === 'string') {
+              return { content: item }
+            }
+            if (typeof item === 'object' && item !== null && 'content' in item) {
+              return {
+                content: (item as { content: string }).content,
+                activeForm: (item as { activeForm?: string }).activeForm
+              }
+            }
+            return { content: String(item) }
+          })
+        }
+      }
 
       switch (action) {
         case 'set': {
-          if (!items || !Array.isArray(items) || items.length === 0) {
+          if (!items || items.length === 0) {
             return { success: false, error: 'Items array is required for "set" action' }
           }
 
-          const todos = manager.setAll(items.map(content => ({ content })))
+          const todos = manager.setAll(items)
           const current = manager.getCurrentTask()
+          const currentLabel = current?.activeForm || current?.content
 
           return {
             success: true,
             data: {
-              message: `Created ${todos.length} tasks. Starting: "${current?.content}"`,
+              message: `Created ${todos.length} tasks. Starting: "${currentLabel}"`,
               todos: manager.getAll(),
-              current: current?.content
+              current: currentLabel
             }
           }
         }
@@ -269,18 +316,21 @@ Best practices:
             message = `Completed: "${completed.content}". `
           }
           if (next) {
-            message += `Next: "${next.content}". `
+            const nextLabel = next.activeForm || next.content
+            message += `Next: "${nextLabel}". `
           } else if (manager.isAllCompleted()) {
             message += 'All tasks completed!'
           }
           message += `Progress: ${progress.completed}/${progress.total}`
+
+          const nextLabel = next ? (next.activeForm || next.content) : undefined
 
           return {
             success: true,
             data: {
               message,
               todos: manager.getAll(),
-              current: next?.content,
+              current: nextLabel,
               progress
             }
           }
@@ -290,13 +340,14 @@ Best practices:
           const todos = manager.getAll()
           const current = manager.getCurrentTask()
           const progress = manager.getProgress()
+          const currentLabel = current ? (current.activeForm || current.content) : undefined
 
           return {
             success: true,
             data: {
               message: formatTodoList(todos),
               todos,
-              current: current?.content,
+              current: currentLabel,
               progress
             }
           }
