@@ -16,13 +16,13 @@ Minimal TypeScript agent framework inspired by Claude Code architecture.
 ## Installation
 
 ```bash
-pnpm add hive-agent
+pnpm add @alexnetrebskii/hive-agent
 ```
 
 ## Quick Start
 
 ```typescript
-import { Hive, ClaudeProvider } from 'hive-agent'
+import { Hive, ClaudeProvider } from '@alexnetrebskii/hive-agent'
 
 const provider = new ClaudeProvider({
   apiKey: process.env.ANTHROPIC_API_KEY
@@ -41,7 +41,7 @@ console.log(result.response)
 ## Defining Tools
 
 ```typescript
-import type { Tool } from 'hive-agent'
+import type { Tool } from '@alexnetrebskii/hive-agent'
 
 const weatherTool: Tool = {
   name: 'get_weather',
@@ -71,7 +71,7 @@ const agent = new Hive({
 Spawn specialized agents for complex tasks:
 
 ```typescript
-import type { SubAgentConfig } from 'hive-agent'
+import type { SubAgentConfig } from '@alexnetrebskii/hive-agent'
 
 const researchAgent: SubAgentConfig = {
   name: 'researcher',
@@ -96,7 +96,7 @@ const result = await agent.run('Research the latest AI developments')
 Each sub-agent can use different models or providers:
 
 ```typescript
-import { ClaudeProvider, OpenAIProvider } from 'hive-agent'
+import { ClaudeProvider, OpenAIProvider } from '@alexnetrebskii/hive-agent'
 
 const claudeProvider = new ClaudeProvider({ apiKey: '...' })
 const openaiProvider = new OpenAIProvider({ apiKey: '...', model: 'gpt-4o' })
@@ -125,7 +125,7 @@ const agent = new Hive({
 Pass a `conversationId` and Hive automatically loads/saves history:
 
 ```typescript
-import { Hive, ClaudeProvider, MemoryRepository } from 'hive-agent'
+import { Hive, ClaudeProvider, MemoryRepository } from '@alexnetrebskii/hive-agent'
 
 const agent = new Hive({
   systemPrompt: '...',
@@ -150,7 +150,7 @@ const result2 = await agent.run(nextMessage, {
 Implement `RepositoryProvider` for your database:
 
 ```typescript
-import type { RepositoryProvider, Message } from 'hive-agent'
+import type { RepositoryProvider, Message } from '@alexnetrebskii/hive-agent'
 
 class FirestoreRepository implements RepositoryProvider {
   constructor(private db: Firestore) {}
@@ -286,7 +286,7 @@ if (result.status === 'interrupted') {
 Get real-time feedback during execution:
 
 ```typescript
-import { ConsoleLogger } from 'hive-agent'
+import { ConsoleLogger } from '@alexnetrebskii/hive-agent'
 
 const logger = {
   ...new ConsoleLogger({ level: 'info' }),
@@ -352,7 +352,7 @@ interface HiveConfig {
 ### Claude (Anthropic)
 
 ```typescript
-import { ClaudeProvider } from 'hive-agent'
+import { ClaudeProvider } from '@alexnetrebskii/hive-agent'
 
 const provider = new ClaudeProvider({
   apiKey: process.env.ANTHROPIC_API_KEY,
@@ -364,7 +364,7 @@ const provider = new ClaudeProvider({
 ### OpenAI
 
 ```typescript
-import { OpenAIProvider } from 'hive-agent'
+import { OpenAIProvider } from '@alexnetrebskii/hive-agent'
 
 const provider = new OpenAIProvider({
   apiKey: process.env.OPENAI_API_KEY,

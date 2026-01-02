@@ -21,7 +21,7 @@ Practical examples for common use cases.
 Simple conversational agent without tools:
 
 ```typescript
-import { Hive, ClaudeProvider } from 'hive-agent'
+import { Hive, ClaudeProvider } from '@alexnetrebskii/hive-agent'
 
 const agent = new Hive({
   systemPrompt: `You are a friendly assistant. Be concise and helpful.`,
@@ -49,7 +49,7 @@ console.log(r2.response) // "Your name is Alex"
 Agent with custom tools:
 
 ```typescript
-import { Hive, ClaudeProvider, type Tool } from 'hive-agent'
+import { Hive, ClaudeProvider, type Tool } from '@alexnetrebskii/hive-agent'
 
 // Calculator tool
 const calculatorTool: Tool = {
@@ -117,7 +117,7 @@ const result = await agent.run('What is 15% of 250?')
 Stateless handler for serverless deployment:
 
 ```typescript
-import { Hive, ClaudeProvider } from 'hive-agent'
+import { Hive, ClaudeProvider } from '@alexnetrebskii/hive-agent'
 import * as functions from 'firebase-functions'
 import * as admin from 'firebase-admin'
 
@@ -170,7 +170,7 @@ export const chat = functions.https.onRequest(async (req, res) => {
 Complete Telegram bot with interactive questions:
 
 ```typescript
-import { Hive, ClaudeProvider, type Message } from 'hive-agent'
+import { Hive, ClaudeProvider, type Message } from '@alexnetrebskii/hive-agent'
 import TelegramBot from 'node-telegram-bot-api'
 
 const bot = new TelegramBot(process.env.TELEGRAM_TOKEN!, { polling: true })
@@ -235,7 +235,7 @@ bot.onText(/\/clear/, (msg) => {
 Complex system with specialized sub-agents:
 
 ```typescript
-import { Hive, ClaudeProvider, type SubAgentConfig, type Tool } from 'hive-agent'
+import { Hive, ClaudeProvider, type SubAgentConfig, type Tool } from '@alexnetrebskii/hive-agent'
 
 // Tools for research agent
 const webSearchTool: Tool = {
@@ -334,7 +334,7 @@ const result = await orchestrator.run(
 Use different LLM providers for different agents:
 
 ```typescript
-import { Hive, ClaudeProvider, OpenAIProvider, type SubAgentConfig } from 'hive-agent'
+import { Hive, ClaudeProvider, OpenAIProvider, type SubAgentConfig } from '@alexnetrebskii/hive-agent'
 
 const claude = new ClaudeProvider({
   apiKey: process.env.ANTHROPIC_API_KEY,
@@ -397,7 +397,7 @@ const agent = new Hive({
 Multi-step workflows with user input:
 
 ```typescript
-import { Hive, ClaudeProvider, type Tool } from 'hive-agent'
+import { Hive, ClaudeProvider, type Tool } from '@alexnetrebskii/hive-agent'
 import * as readline from 'readline'
 
 const createProjectTool: Tool = {
@@ -478,7 +478,7 @@ main()
 Real-time progress feedback:
 
 ```typescript
-import { Hive, ClaudeProvider, ConsoleLogger, type ProgressUpdate } from 'hive-agent'
+import { Hive, ClaudeProvider, ConsoleLogger, type ProgressUpdate } from '@alexnetrebskii/hive-agent'
 
 // Custom progress handler
 function handleProgress(update: ProgressUpdate) {
@@ -528,7 +528,7 @@ const agent = new Hive({
 Handle large conversations:
 
 ```typescript
-import { Hive, ClaudeProvider, type Tool } from 'hive-agent'
+import { Hive, ClaudeProvider, type Tool } from '@alexnetrebskii/hive-agent'
 
 // Tool that respects context limits
 const readLargeFileTool: Tool = {
