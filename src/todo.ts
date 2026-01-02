@@ -195,33 +195,38 @@ export class TodoManager {
 export function createTodoTool(manager: TodoManager): Tool {
   return {
     name: '__todo__',
-    description: `Manage a todo list to track and execute tasks step by step.
+    description: `Manage a todo list to track REAL tasks you are performing.
+
+IMPORTANT: Only use for tasks YOU will actually execute using tools. Do NOT:
+- Create fictional tasks you cannot perform (cooking, gym, etc.)
+- Create tasks about what the USER is doing
+- Mark tasks complete without actually doing work
 
 Use this tool to:
-- Create a list of tasks to complete for complex requests
-- Mark tasks as completed as you finish them
-- Track your progress through a multi-step process
+- Track multi-step work YOU are doing (code changes, file edits, searches)
+- Mark tasks complete AFTER you've actually performed them with other tools
+- Show progress through complex technical tasks
 
 Actions:
-- "set": Replace the entire todo list with new items
-- "complete": Mark the current task as done and move to next
-- "list": Show current todo list status
+- "set": Create a list of tasks (only for work you'll do with tools)
+- "complete": Mark current task done (only AFTER you've done it)
+- "list": Show current progress
 
 Items format:
-Each item should have:
-- content: What needs to be done (imperative form, e.g., "Run tests")
-- activeForm: What's happening (present continuous, e.g., "Running tests")
+- content: Task description (e.g., "Update config file")
+- activeForm: Active form (e.g., "Updating config file")
 
-Examples:
-- Set todos: { "action": "set", "items": [{"content": "Run tests", "activeForm": "Running tests"}, {"content": "Build project", "activeForm": "Building project"}] }
-- Complete current: { "action": "complete" }
-- Show list: { "action": "list" }
+Example (correct - actual work):
+{ "action": "set", "items": [
+  {"content": "Search for error handling", "activeForm": "Searching for error handling"},
+  {"content": "Fix the bug in auth.ts", "activeForm": "Fixing the bug"},
+  {"content": "Run tests", "activeForm": "Running tests"}
+]}
 
-Best practices:
-- Create a todo list at the start of complex tasks
-- Complete each task before moving to the next
-- Keep task descriptions concise but clear
-- Use activeForm to show dynamic status during execution`,
+WRONG - do NOT create:
+- "Make breakfast" (you can't cook)
+- "Go to gym" (you can't move)
+- "User will review" (that's not your task)`,
 
     parameters: {
       type: 'object',
