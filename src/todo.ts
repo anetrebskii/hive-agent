@@ -1,0 +1,310 @@
+/**
+ * Todo List Management
+ *
+ * Provides todo list functionality for agents to track and execute tasks.
+ */
+
+import type { Tool, TodoItem, TodoStatus, TodoList } from './types.js'
+
+/**
+ * Generate unique ID for todo items
+ */
+function generateId(): string {
+  return Math.random().toString(36).substring(2, 9)
+}
+
+/**
+ * Format todo list for display
+ */
+export function formatTodoList(todos: TodoItem[]): string {
+  if (todos.length === 0) {
+    return 'No tasks in the todo list.'
+  }
+
+  const statusEmoji: Record<TodoStatus, string> = {
+    pending: '⬜',
+    in_progress: '🔄',
+    completed: '✅'
+  }
+
+  return todos
+    .map((todo, index) => {
+      const emoji = statusEmoji[todo.status]
+      return `${index + 1}. ${emoji} ${todo.content}`
+    })
+    .join('\n')
+}
+
+/**
+ * Create the TodoManager class for tracking todos during execution
+ */
+export class TodoManager {
+  private items: Map<string, TodoItem> = new Map()
+  private currentTaskId?: string
+
+  /**
+   * Get all todo items
+   */
+  getAll(): TodoItem[] {
+    return Array.from(this.items.values())
+  }
+
+  /**
+   * Get current task being worked on
+   */
+  getCurrentTask(): TodoItem | undefined {
+    if (!this.currentTaskId) return undefined
+    return this.items.get(this.currentTaskId)
+  }
+
+  /**
+   * Add a new todo item
+   */
+  add(content: string): TodoItem {
+    const item: TodoItem = {
+      id: generateId(),
+      content,
+      status: 'pending',
+      createdAt: Date.now()
+    }
+    this.items.set(item.id, item)
+    return item
+  }
+
+  /**
+   * Set multiple todos at once (replaces existing)
+   */
+  setAll(todos: Array<{ content: string; status?: TodoStatus }>): TodoItem[] {
+    this.items.clear()
+    this.currentTaskId = undefined
+
+    const items = todos.map(todo => {
+      const item: TodoItem = {
+        id: generateId(),
+        content: todo.content,
+        status: todo.status || 'pending',
+        createdAt: Date.now()
+      }
+      this.items.set(item.id, item)
+      return item
+    })
+
+    // Set first pending as in_progress
+    const firstPending = items.find(i => i.status === 'pending')
+    if (firstPending) {
+      firstPending.status = 'in_progress'
+      this.currentTaskId = firstPending.id
+    }
+
+    return items
+  }
+
+  /**
+   * Mark a todo as in progress
+   */
+  startTask(id: string): TodoItem | undefined {
+    const item = this.items.get(id)
+    if (!item) return undefined
+
+    // Mark previous current as pending if not completed
+    if (this.currentTaskId && this.currentTaskId !== id) {
+      const current = this.items.get(this.currentTaskId)
+      if (current && current.status === 'in_progress') {
+        current.status = 'pending'
+      }
+    }
+
+    item.status = 'in_progress'
+    this.currentTaskId = id
+    return item
+  }
+
+  /**
+   * Mark a todo as completed and start next
+   */
+  completeTask(id: string): { completed: TodoItem; next?: TodoItem } | undefined {
+    const item = this.items.get(id)
+    if (!item) return undefined
+
+    item.status = 'completed'
+    item.completedAt = Date.now()
+
+    if (this.currentTaskId === id) {
+      this.currentTaskId = undefined
+    }
+
+    // Find and start next pending task
+    const nextPending = Array.from(this.items.values()).find(i => i.status === 'pending')
+    if (nextPending) {
+      nextPending.status = 'in_progress'
+      this.currentTaskId = nextPending.id
+      return { completed: item, next: nextPending }
+    }
+
+    return { completed: item }
+  }
+
+  /**
+   * Complete current task and move to next
+   */
+  completeCurrentAndNext(): { completed?: TodoItem; next?: TodoItem } {
+    if (!this.currentTaskId) {
+      // No current task, find first pending
+      const pending = Array.from(this.items.values()).find(i => i.status === 'pending')
+      if (pending) {
+        pending.status = 'in_progress'
+        this.currentTaskId = pending.id
+        return { next: pending }
+      }
+      return {}
+    }
+
+    return this.completeTask(this.currentTaskId) || {}
+  }
+
+  /**
+   * Check if all tasks are completed
+   */
+  isAllCompleted(): boolean {
+    return Array.from(this.items.values()).every(i => i.status === 'completed')
+  }
+
+  /**
+   * Get progress stats
+   */
+  getProgress(): { total: number; completed: number; pending: number; inProgress: number } {
+    const items = Array.from(this.items.values())
+    return {
+      total: items.length,
+      completed: items.filter(i => i.status === 'completed').length,
+      pending: items.filter(i => i.status === 'pending').length,
+      inProgress: items.filter(i => i.status === 'in_progress').length
+    }
+  }
+}
+
+/**
+ * Create the __todo__ tool
+ */
+export function createTodoTool(manager: TodoManager): Tool {
+  return {
+    name: '__todo__',
+    description: `Manage a todo list to track and execute tasks step by step.
+
+Use this tool to:
+- Create a list of tasks to complete for complex requests
+- Mark tasks as completed as you finish them
+- Track your progress through a multi-step process
+
+Actions:
+- "set": Replace the entire todo list with new items
+- "complete": Mark the current task as done and move to next
+- "list": Show current todo list status
+
+Examples:
+- Set todos: { "action": "set", "items": ["Research the topic", "Write the code", "Test the implementation"] }
+- Complete current: { "action": "complete" }
+- Show list: { "action": "list" }
+
+Best practices:
+- Create a todo list at the start of complex tasks
+- Complete each task before moving to the next
+- Keep task descriptions concise but clear`,
+
+    parameters: {
+      type: 'object',
+      properties: {
+        action: {
+          type: 'string',
+          enum: ['set', 'complete', 'list'],
+          description: 'The action to perform'
+        },
+        items: {
+          type: 'string',
+          description: 'Array of task descriptions (for "set" action)'
+        }
+      },
+      required: ['action']
+    },
+
+    execute: async (params) => {
+      const { action, items } = params as { action: string; items?: string[] }
+
+      switch (action) {
+        case 'set': {
+          if (!items || !Array.isArray(items) || items.length === 0) {
+            return { success: false, error: 'Items array is required for "set" action' }
+          }
+
+          const todos = manager.setAll(items.map(content => ({ content })))
+          const current = manager.getCurrentTask()
+
+          return {
+            success: true,
+            data: {
+              message: `Created ${todos.length} tasks. Starting: "${current?.content}"`,
+              todos: manager.getAll(),
+              current: current?.content
+            }
+          }
+        }
+
+        case 'complete': {
+          const { completed, next } = manager.completeCurrentAndNext()
+
+          if (!completed && !next) {
+            return {
+              success: true,
+              data: {
+                message: 'No tasks to complete.',
+                todos: manager.getAll()
+              }
+            }
+          }
+
+          const progress = manager.getProgress()
+          let message = ''
+
+          if (completed) {
+            message = `Completed: "${completed.content}". `
+          }
+          if (next) {
+            message += `Next: "${next.content}". `
+          } else if (manager.isAllCompleted()) {
+            message += 'All tasks completed!'
+          }
+          message += `Progress: ${progress.completed}/${progress.total}`
+
+          return {
+            success: true,
+            data: {
+              message,
+              todos: manager.getAll(),
+              current: next?.content,
+              progress
+            }
+          }
+        }
+
+        case 'list': {
+          const todos = manager.getAll()
+          const current = manager.getCurrentTask()
+          const progress = manager.getProgress()
+
+          return {
+            success: true,
+            data: {
+              message: formatTodoList(todos),
+              todos,
+              current: current?.content,
+              progress
+            }
+          }
+        }
+
+        default:
+          return { success: false, error: `Unknown action: ${action}` }
+      }
+    }
+  }
+}

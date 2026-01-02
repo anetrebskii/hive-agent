@@ -1,0 +1,2 @@
+- Support caching
+- Return information about token usage for each model, including cached ones
