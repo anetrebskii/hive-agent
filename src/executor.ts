@@ -20,7 +20,7 @@ import type {
   AgentResult,
   PendingQuestion
 } from './types.js'
-import { ContextManager } from './context.js'
+import { ContextManager } from './context-manager.js'
 import { TodoManager } from './todo.js'
 
 const ASK_USER_TOOL_NAME = '__ask_user__'

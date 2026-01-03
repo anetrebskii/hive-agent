@@ -85,7 +85,7 @@ export {
   estimateTotalTokens,
   truncateOldMessages,
   ContextManager
-} from './context.js'
+} from './context-manager.js'
 
 export {
   buildSystemPrompt,
@@ -134,4 +134,4 @@ export {
   type ZodLike,
   type ValidationError,
   type WriteResult
-} from './shared-context.js'
+} from './context.js'

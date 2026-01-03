@@ -14,11 +14,11 @@ import type {
   SubAgentConfig,
   JSONSchema
 } from './types.js'
-import { ContextManager } from './context.js'
+import { ContextManager } from './context-manager.js'
 import { executeLoop } from './executor.js'
 import { TodoManager, createTodoTool } from './todo.js'
 import { TraceBuilder } from './trace.js'
-import { Context, createContextTools } from './shared-context.js'
+import { Context, createContextTools } from './context.js'
 
 /**
  * Create the __ask_user__ tool

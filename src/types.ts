@@ -66,7 +66,7 @@ export interface ToolContext {
   conversationId?: string
   userId?: string
   /** Context for tool/agent communication */
-  context?: import('./shared-context.js').Context
+  context?: import('./context.js').Context
 }
 
 export interface Tool {
@@ -247,7 +247,7 @@ export interface RunOptions {
    * Context for tool/agent communication.
    * Pre-populate before run, read results after run.
    */
-  context?: import('./shared-context.js').Context
+  context?: import('./context.js').Context
 
   /**
    * AbortSignal for cancellation (e.g., from AbortController)
