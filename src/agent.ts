@@ -276,8 +276,17 @@ Usage:
         // Merge sub-agent usage into parent's accumulated usage
         hive.mergeSubAgentUsage(result.usageByModel)
 
-        // Log sub-agent completion
-        hive.config.logger?.info(`[Sub-Agent: ${agentName}] Completed (${result.toolCalls.length} tool calls)`)
+        // Log sub-agent completion with details
+        hive.config.logger?.info(`[Sub-Agent: ${agentName}] Completed with status: ${result.status}`)
+        hive.config.logger?.debug(`[Sub-Agent: ${agentName}] Tool calls: ${result.toolCalls.length}`,
+          result.toolCalls.map(tc => tc.name))
+        hive.config.logger?.debug(`[Sub-Agent: ${agentName}] Response length: ${result.response?.length || 0}`)
+        if (result.response) {
+          hive.config.logger?.debug(`[Sub-Agent: ${agentName}] Response preview: ${result.response.slice(0, 200)}${result.response.length > 200 ? '...' : ''}`)
+        }
+        if (result.thinking && result.thinking.length > 0) {
+          hive.config.logger?.debug(`[Sub-Agent: ${agentName}] Thinking blocks: ${result.thinking.length}`)
+        }
 
         // Progress: sub-agent completed
         hive.config.logger?.onProgress?.({
@@ -287,6 +296,7 @@ Usage:
         })
 
         if (result.status === 'needs_input') {
+          hive.config.logger?.debug(`[Sub-Agent: ${agentName}] Returning: needs_input`)
           return {
             success: false,
             error: 'Sub-agent needs user input',
@@ -294,10 +304,28 @@ Usage:
           }
         }
 
+        if (result.status === 'interrupted') {
+          hive.config.logger?.warn(`[Sub-Agent: ${agentName}] Was interrupted: ${result.interrupted?.reason}`)
+          return {
+            success: false,
+            error: `Sub-agent was interrupted: ${result.interrupted?.reason || 'unknown'}`,
+            data: {
+              reason: result.interrupted?.reason,
+              iterationsCompleted: result.interrupted?.iterationsCompleted
+            }
+          }
+        }
+
         // Check if sub-agent used __output__ tool to return structured data
         const outputCall = result.toolCalls.find(tc => tc.name === OUTPUT_TOOL_NAME)
+        hive.config.logger?.debug(`[Sub-Agent: ${agentName}] __output__ tool used: ${!!outputCall}`)
+
         if (outputCall && outputCall.output?.success && outputCall.output?.data) {
           const outputData = outputCall.output.data as { summary: string; data: unknown }
+          hive.config.logger?.debug(`[Sub-Agent: ${agentName}] Returning structured output`, {
+            summaryLength: outputData.summary?.length || 0,
+            hasData: outputData.data !== null && outputData.data !== undefined
+          })
           return {
             success: true,
             data: {
@@ -308,6 +336,10 @@ Usage:
         }
 
         // Legacy: return response text as summary
+        hive.config.logger?.debug(`[Sub-Agent: ${agentName}] Returning legacy response`, {
+          responseLength: result.response?.length || 0,
+          isEmpty: !result.response
+        })
         return {
           success: true,
           data: {
