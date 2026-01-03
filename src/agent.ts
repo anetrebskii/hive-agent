@@ -18,6 +18,7 @@ import { ContextManager } from './context.js'
 import { executeLoop } from './executor.js'
 import { TodoManager, createTodoTool } from './todo.js'
 import { TraceBuilder } from './trace.js'
+import { Context, createContextTools } from './shared-context.js'
 
 /**
  * Create the __ask_user__ tool
@@ -171,7 +172,7 @@ Usage:
       properties: combinedProperties,
       required: ['agent']
     } as JSONSchema,
-    execute: async (params, context) => {
+    execute: async (params, toolCtx) => {
       const { agent: agentName, ...inputParams } = params as { agent: string; prompt?: string; [key: string]: unknown }
 
       const agentConfig = agents.find(a => a.name === agentName)
@@ -261,9 +262,10 @@ Usage:
           // Pass trace builder for nested tracing
           _traceBuilder: parentTraceBuilder,
           // Pass context to sub-agent so its tools receive the same context
-          conversationId: context.conversationId,
-          userId: context.userId,
-          metadata: context.metadata
+          conversationId: toolCtx.conversationId,
+          userId: toolCtx.userId,
+          // Pass context so sub-agent can read/write to same context
+          context: toolCtx.context
         })
 
         // End sub-agent span in trace
@@ -470,18 +472,25 @@ export class Hive {
   /**
    * Get tools including internal tools for a specific run
    */
-  private getRunTools(todoManager: TodoManager): Tool[] {
-    return [
+  private getRunTools(todoManager: TodoManager, context?: Context, agentName?: string): Tool[] {
+    const tools = [
       ...this.tools,
       createTodoTool(todoManager)
     ]
+
+    // Add context tools if Context is provided
+    if (context) {
+      tools.push(...createContextTools(context, agentName))
+    }
+
+    return tools
   }
 
   /**
    * Run the agent with a user message
    */
   async run(message: string, options: RunOptions = {}): Promise<AgentResult> {
-    const { conversationId, userId, metadata, history: providedHistory, signal, shouldContinue } = options
+    const { conversationId, userId, history: providedHistory, signal, shouldContinue, context } = options
 
     // Load history from repository or use provided
     let history: Message[] = []
@@ -558,7 +567,7 @@ export class Hive {
       remainingTokens: this.contextManager.getRemainingTokens(),
       conversationId,
       userId,
-      metadata
+      context
     }
 
     // Create or use existing trace builder
@@ -581,7 +590,7 @@ export class Hive {
     const result = await executeLoop(
       {
         systemPrompt: this.config.systemPrompt,
-        tools: this.getRunTools(todoManager),
+        tools: this.getRunTools(todoManager, context, this.config.agentName),
         llm: this.config.llm,
         logger: this.config.logger,
         maxIterations: this.config.maxIterations!,

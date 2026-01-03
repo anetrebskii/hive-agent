@@ -121,3 +121,11 @@ export {
   type ModelPricing,
   type ConsoleTraceConfig
 } from './trace.js'
+
+// Context
+export {
+  Context,
+  createContextTools,
+  type ContextEntry,
+  type ContextListItem
+} from './shared-context.js'

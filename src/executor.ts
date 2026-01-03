@@ -121,9 +121,6 @@ async function executeTool(
   // Log tool execution details
   logger?.debug(`[Tool: ${tool.name}] Executing with params: ${truncateForLog(params)}`)
   logger?.debug(`[Tool: ${tool.name}] Context: conversationId=${context.conversationId}, userId=${context.userId}, remainingTokens=${context.remainingTokens}`)
-  if (context.metadata && Object.keys(context.metadata).length > 0) {
-    logger?.debug(`[Tool: ${tool.name}] Metadata: ${truncateForLog(context.metadata)}`)
-  }
 
   logger?.onToolCall?.(tool.name, params)
 

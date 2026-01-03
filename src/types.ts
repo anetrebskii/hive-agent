@@ -65,7 +65,8 @@ export interface ToolContext {
   remainingTokens: number
   conversationId?: string
   userId?: string
-  metadata?: Record<string, unknown>
+  /** Context for tool/agent communication */
+  context?: import('./shared-context.js').Context
 }
 
 export interface Tool {
@@ -240,8 +241,13 @@ export interface HiveConfig {
 export interface RunOptions {
   conversationId?: string
   userId?: string
-  metadata?: Record<string, unknown>
   history?: Message[]
+
+  /**
+   * Context for tool/agent communication.
+   * Pre-populate before run, read results after run.
+   */
+  context?: import('./shared-context.js').Context
 
   /**
    * AbortSignal for cancellation (e.g., from AbortController)
