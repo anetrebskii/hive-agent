@@ -171,7 +171,7 @@ Usage:
       properties: combinedProperties,
       required: ['agent']
     } as JSONSchema,
-    execute: async (params) => {
+    execute: async (params, context) => {
       const { agent: agentName, ...inputParams } = params as { agent: string; prompt?: string; [key: string]: unknown }
 
       const agentConfig = agents.find(a => a.name === agentName)
@@ -259,7 +259,11 @@ Usage:
 
         const result = await subHive.run(inputMessage, {
           // Pass trace builder for nested tracing
-          _traceBuilder: parentTraceBuilder
+          _traceBuilder: parentTraceBuilder,
+          // Pass context to sub-agent so its tools receive the same context
+          conversationId: context.conversationId,
+          userId: context.userId,
+          metadata: context.metadata
         })
 
         // End sub-agent span in trace
