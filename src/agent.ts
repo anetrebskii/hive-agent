@@ -15,7 +15,7 @@ import type {
   JSONSchema
 } from './types.js'
 import { ContextManager } from './context.js'
-import { executeLoop, cleanupInterruptedHistory } from './executor.js'
+import { executeLoop } from './executor.js'
 import { TodoManager, createTodoTool } from './todo.js'
 import { TraceBuilder } from './trace.js'
 
@@ -455,10 +455,6 @@ export class Hive {
     } else if (conversationId && this.config.repository) {
       history = await this.config.repository.getHistory(conversationId)
     }
-
-    // Clean up any interrupted tool_use blocks in the history
-    // This handles cases where the app crashed mid-execution
-    history = cleanupInterruptedHistory(history)
 
     // Handle history with pending tool_use blocks (from interrupted executions)
     const messages: Message[] = [...history]

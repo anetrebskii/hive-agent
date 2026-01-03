@@ -177,126 +177,6 @@ async function checkInterruption(
 }
 
 /**
- * Clean up history after interruption
- * Scans the ENTIRE history for tool_use blocks without corresponding tool_results
- * and adds cancelled tool_results to make the history valid for the next API call.
- *
- * Claude API requires: if assistant message has tool_use, the immediately following
- * user message MUST have tool_result for EACH tool_use.
- *
- * Also removes empty messages that could cause API errors.
- */
-export function cleanupInterruptedHistory(messages: Message[]): Message[] {
-  if (messages.length === 0) return messages
-
-  // First pass: remove empty messages and collect tool_use IDs that need results
-  const filtered = messages.filter(msg => {
-    // Remove messages with empty content
-    if (typeof msg.content === 'string') {
-      return msg.content.trim().length > 0
-    }
-    if (Array.isArray(msg.content)) {
-      return msg.content.length > 0
-    }
-    return false
-  })
-
-  if (filtered.length === 0) return []
-
-  // Second pass: fix orphaned tool_use blocks
-  const result: Message[] = []
-
-  for (let i = 0; i < filtered.length; i++) {
-    const msg = filtered[i]
-
-    // Check if this is an assistant message with tool_use blocks
-    if (msg.role === 'assistant' && Array.isArray(msg.content)) {
-      const toolUseBlocks = msg.content.filter(
-        (block): block is ToolUseBlock => block.type === 'tool_use'
-      )
-
-      result.push(msg)
-
-      if (toolUseBlocks.length > 0) {
-        const toolUseIds = new Set(toolUseBlocks.map(b => b.id))
-
-        // Check the next message for tool_results
-        const nextMsg = filtered[i + 1]
-
-        if (nextMsg && nextMsg.role === 'user' && Array.isArray(nextMsg.content)) {
-          // Find which tool_use IDs have results
-          const resultIds = new Set(
-            nextMsg.content
-              .filter((block): block is ToolResultBlock => block.type === 'tool_result')
-              .map(b => b.tool_use_id)
-          )
-
-          // Find missing results
-          const missingIds = [...toolUseIds].filter(id => !resultIds.has(id))
-
-          if (missingIds.length > 0) {
-            // Add missing tool_results to the next message
-            const missingResults: ToolResultBlock[] = missingIds.map(id => ({
-              type: 'tool_result' as const,
-              tool_use_id: id,
-              content: JSON.stringify({
-                success: false,
-                error: 'Operation cancelled - execution was interrupted'
-              }),
-              is_error: true
-            }))
-
-            // Modify the next message to include missing results
-            i++ // Skip the next message since we're modifying it
-            result.push({
-              role: 'user',
-              content: [...missingResults, ...nextMsg.content]
-            })
-          }
-        } else if (nextMsg && nextMsg.role === 'user' && typeof nextMsg.content === 'string') {
-          // Next message is user with string content - need to add tool_results
-          i++ // Skip the next message since we're modifying it
-          const cancelledResults: ToolResultBlock[] = toolUseBlocks.map(toolUse => ({
-            type: 'tool_result' as const,
-            tool_use_id: toolUse.id,
-            content: JSON.stringify({
-              success: false,
-              error: 'Operation cancelled - execution was interrupted'
-            }),
-            is_error: true
-          }))
-
-          result.push({
-            role: 'user',
-            content: [
-              ...cancelledResults,
-              { type: 'text' as const, text: nextMsg.content }
-            ]
-          })
-        } else if (!nextMsg || nextMsg.role === 'assistant') {
-          // No user message after tool_use, or next is assistant - add cancelled results
-          const cancelledResults: ToolResultBlock[] = toolUseBlocks.map(toolUse => ({
-            type: 'tool_result' as const,
-            tool_use_id: toolUse.id,
-            content: JSON.stringify({
-              success: false,
-              error: 'Operation cancelled - execution was interrupted'
-            }),
-            is_error: true
-          }))
-
-          result.push({ role: 'user' as const, content: cancelledResults })
-        }
-      }
-    } else {
-      result.push(msg)
-    }
-  }
-
-  return result
-}
-
-/**
  * Build interrupted result
  */
 /** Usage breakdown by model */
@@ -320,12 +200,9 @@ function buildInterruptedResult(
 ): AgentResult {
   const todos = todoManager.getAll()
 
-  // Clean up history to ensure it's valid for continuation
-  const cleanedHistory = cleanupInterruptedHistory(messages)
-
   return {
     response: '',
-    history: cleanedHistory,
+    history: messages,
     toolCalls: toolCallLogs,
     thinking: thinkingBlocks.length > 0 ? thinkingBlocks : undefined,
     todos: todos.length > 0 ? todos : undefined,

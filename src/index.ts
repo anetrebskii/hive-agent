@@ -101,11 +101,6 @@ export {
   formatTodoList
 } from './todo.js'
 
-// History utilities
-export {
-  cleanupInterruptedHistory
-} from './executor.js'
-
 // Tracing
 export {
   TraceBuilder,
