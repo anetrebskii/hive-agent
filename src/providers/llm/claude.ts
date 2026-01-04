@@ -19,15 +19,12 @@ export interface ClaudeProviderConfig {
   apiKey?: string
   model?: string
   maxTokens?: number
-  /** Enable prompt caching to reduce costs */
-  cache?: boolean
 }
 
 export class ClaudeProvider implements LLMProvider {
   private client: Anthropic
   private model: string
   private maxTokens: number
-  private cache: boolean
 
   constructor(config: ClaudeProviderConfig = {}) {
     this.client = new Anthropic({
@@ -35,7 +32,6 @@ export class ClaudeProvider implements LLMProvider {
     })
     this.model = config.model || 'claude-sonnet-4-20250514'
     this.maxTokens = config.maxTokens || 8192
-    this.cache = config.cache ?? false
   }
 
   async chat(
@@ -44,9 +40,9 @@ export class ClaudeProvider implements LLMProvider {
     tools: ToolSchema[],
     options: LLMOptions = {}
   ): Promise<LLMResponse> {
-    const anthropicMessages = this.convertMessages(messages, this.cache)
-    const anthropicTools = this.convertTools(tools, this.cache)
-    const systemContent = this.buildSystemContent(systemPrompt, this.cache)
+    const anthropicMessages = this.convertMessages(messages)
+    const anthropicTools = this.convertTools(tools)
+    const systemContent = this.buildSystemContent(systemPrompt)
 
     const requestParams: Anthropic.MessageCreateParams = {
       model: options.model || this.model,
@@ -62,16 +58,9 @@ export class ClaudeProvider implements LLMProvider {
   }
 
   /**
-   * Build system content with optional caching
+   * Build system content with caching
    */
-  private buildSystemContent(
-    systemPrompt: string,
-    enableCache: boolean
-  ): string | Anthropic.TextBlockParam[] {
-    if (!enableCache) {
-      return systemPrompt
-    }
-
+  private buildSystemContent(systemPrompt: string): Anthropic.TextBlockParam[] {
     return [{
       type: 'text' as const,
       text: systemPrompt,
@@ -79,12 +68,12 @@ export class ClaudeProvider implements LLMProvider {
     }]
   }
 
-  private convertMessages(messages: Message[], enableCache: boolean = false): Anthropic.MessageParam[] {
+  private convertMessages(messages: Message[]): Anthropic.MessageParam[] {
     // Find the last user message index for cache breakpoint
     const lastUserIndex = this.findLastUserMessageIndex(messages)
 
     return messages.map((msg, index) => {
-      const shouldCache = enableCache && index === lastUserIndex
+      const shouldCache = index === lastUserIndex
 
       if (typeof msg.content === 'string') {
         if (shouldCache) {
@@ -152,7 +141,7 @@ export class ClaudeProvider implements LLMProvider {
     }) as Anthropic.ContentBlockParam[]
   }
 
-  private convertTools(tools: ToolSchema[], enableCache: boolean = false): Anthropic.Tool[] {
+  private convertTools(tools: ToolSchema[]): Anthropic.Tool[] {
     return tools.map((tool, index) => {
       const isLast = index === tools.length - 1
       const baseTool = {
@@ -161,7 +150,8 @@ export class ClaudeProvider implements LLMProvider {
         input_schema: tool.input_schema as Anthropic.Tool.InputSchema
       }
 
-      if (enableCache && isLast) {
+      // Add cache_control to the last tool
+      if (isLast) {
         return {
           ...baseTool,
           cache_control: { type: 'ephemeral' as const }

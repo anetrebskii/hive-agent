@@ -309,8 +309,7 @@ async function main() {
   const llmProvider = new ClaudeProvider({
     apiKey,
     model: 'claude-3-haiku-20240307',
-    maxTokens: 2000,
-    cache: true
+    maxTokens: 2000
   })
 
   // Create context for agent communication with validation

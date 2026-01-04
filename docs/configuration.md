@@ -23,10 +23,6 @@ interface HiveConfig {
   maxContextTokens?: number     // Max context size (default: 100000)
   contextStrategy?: 'truncate_old' | 'summarize' | 'error'
 
-  // Thinking mode (Claude)
-  thinkingMode?: 'none' | 'enabled'
-  thinkingBudget?: number       // Max thinking tokens
-
   // Built-in tools
   disableAskUser?: boolean      // Disable __ask_user__ tool
 
@@ -117,8 +113,7 @@ const agent = new Hive({
   // LLM
   llm: new ClaudeProvider({
     apiKey: process.env.ANTHROPIC_API_KEY,
-    model: 'claude-sonnet-4-20250514',
-    cache: true
+    model: 'claude-sonnet-4-20250514'
   }),
 
   // Logging
@@ -142,7 +137,7 @@ const agent = new Hive({
 
 ```typescript
 const context = new Context({
-  validators: {
+  paths: {
     'result/data.json': { type: 'object', required: ['status'] }
   }
 })
