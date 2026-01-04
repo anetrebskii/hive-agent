@@ -279,8 +279,6 @@ Usage:
           llm: subLlm,
           logger: subLogger,
           maxIterations: agentConfig.maxIterations || hive.config.maxIterations,
-          thinkingMode: hive.config.thinkingMode,
-          thinkingBudget: hive.config.thinkingBudget,
           disableAskUser: true,  // Sub-agents return questions as text, not via __ask_user__
           // Pass parent's trace/pricing config for nested sub-agents
           trace: hive.config.trace,
@@ -304,9 +302,6 @@ Usage:
                          result.status === 'interrupted' ? 'interrupted' : 'error'
           parentTraceBuilder.endSubAgent(status)
         }
-
-        // Merge sub-agent usage into parent's accumulated usage
-        hive.mergeSubAgentUsage(result.usageByModel)
 
         // Log sub-agent completion with details
         hive.config.logger?.info(`[Sub-Agent: ${agentName}] Completed with status: ${result.status}`)
@@ -404,15 +399,6 @@ Usage:
   }
 }
 
-/** Usage by model type */
-type UsageByModel = Record<string, {
-  inputTokens: number
-  outputTokens: number
-  cacheCreationInputTokens?: number
-  cacheReadInputTokens?: number
-  calls: number
-}>
-
 /**
  * Hive Agent Class
  */
@@ -420,8 +406,6 @@ export class Hive {
   readonly config: HiveConfig
   private contextManager: ContextManager
   private tools: Tool[]
-  /** Accumulated sub-agent usage (for merging into final result) */
-  private subAgentUsage: UsageByModel = {}
   /** Current trace builder (set during run, used by __task__ tool) */
   private currentTraceBuilder?: TraceBuilder
 
@@ -450,39 +434,6 @@ export class Hive {
     if (config.agents && config.agents.length > 0) {
       this.tools.push(createTaskTool(this, config.agents))
     }
-  }
-
-  /**
-   * Merge sub-agent usage into accumulated usage
-   * Called by __task__ tool after sub-agent completes
-   */
-  mergeSubAgentUsage(usage: UsageByModel | undefined): void {
-    if (!usage) return
-    for (const [modelId, modelUsage] of Object.entries(usage)) {
-      if (!this.subAgentUsage[modelId]) {
-        this.subAgentUsage[modelId] = { inputTokens: 0, outputTokens: 0, calls: 0 }
-      }
-      this.subAgentUsage[modelId].inputTokens += modelUsage.inputTokens
-      this.subAgentUsage[modelId].outputTokens += modelUsage.outputTokens
-      this.subAgentUsage[modelId].calls += modelUsage.calls
-      if (modelUsage.cacheCreationInputTokens) {
-        this.subAgentUsage[modelId].cacheCreationInputTokens =
-          (this.subAgentUsage[modelId].cacheCreationInputTokens || 0) + modelUsage.cacheCreationInputTokens
-      }
-      if (modelUsage.cacheReadInputTokens) {
-        this.subAgentUsage[modelId].cacheReadInputTokens =
-          (this.subAgentUsage[modelId].cacheReadInputTokens || 0) + modelUsage.cacheReadInputTokens
-      }
-    }
-  }
-
-  /**
-   * Get accumulated sub-agent usage and reset for next run
-   */
-  getAndResetSubAgentUsage(): UsageByModel {
-    const usage = this.subAgentUsage
-    this.subAgentUsage = {}
-    return usage
   }
 
   /**
@@ -626,10 +577,7 @@ export class Hive {
         maxIterations: this.config.maxIterations!,
         contextManager: this.contextManager,
         todoManager,
-        llmOptions: {
-          thinkingMode: this.config.thinkingMode,
-          thinkingBudget: this.config.thinkingBudget
-        },
+        llmOptions: {},
         signal,
         shouldContinue,
         traceBuilder
@@ -641,30 +589,6 @@ export class Hive {
     // Save history to repository
     if (conversationId && this.config.repository) {
       await this.config.repository.saveHistory(conversationId, result.history)
-    }
-
-    // Merge sub-agent usage into the result
-    const subAgentUsage = this.getAndResetSubAgentUsage()
-    if (Object.keys(subAgentUsage).length > 0) {
-      // Merge sub-agent usage with executor's usageByModel
-      const mergedUsage = { ...result.usageByModel }
-      for (const [modelId, modelUsage] of Object.entries(subAgentUsage)) {
-        if (!mergedUsage[modelId]) {
-          mergedUsage[modelId] = { inputTokens: 0, outputTokens: 0, calls: 0 }
-        }
-        mergedUsage[modelId].inputTokens += modelUsage.inputTokens
-        mergedUsage[modelId].outputTokens += modelUsage.outputTokens
-        mergedUsage[modelId].calls += modelUsage.calls
-        if (modelUsage.cacheCreationInputTokens) {
-          mergedUsage[modelId].cacheCreationInputTokens =
-            (mergedUsage[modelId].cacheCreationInputTokens || 0) + modelUsage.cacheCreationInputTokens
-        }
-        if (modelUsage.cacheReadInputTokens) {
-          mergedUsage[modelId].cacheReadInputTokens =
-            (mergedUsage[modelId].cacheReadInputTokens || 0) + modelUsage.cacheReadInputTokens
-        }
-      }
-      result.usageByModel = mergedUsage
     }
 
     // End trace and attach to result (only for root agent, not sub-agents)

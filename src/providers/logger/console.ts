@@ -86,8 +86,7 @@ export class ConsoleLogger implements LogProvider {
 
   onComplete(result: AgentResult): void {
     this.info(`Agent completed: ${result.status}`, {
-      toolCalls: result.toolCalls.length,
-      usage: result.usage
+      toolCalls: result.toolCalls.length
     })
   }
 }

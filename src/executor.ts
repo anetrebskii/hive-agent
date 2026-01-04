@@ -210,24 +210,13 @@ async function checkInterruption(
 /**
  * Build interrupted result
  */
-/** Usage breakdown by model */
-type UsageByModel = Record<string, {
-  inputTokens: number
-  outputTokens: number
-  cacheCreationInputTokens?: number
-  cacheReadInputTokens?: number
-  calls: number
-}>
-
 function buildInterruptedResult(
   reason: 'aborted' | 'stopped' | 'max_iterations',
   iteration: number,
   messages: Message[],
   toolCallLogs: ToolCallLog[],
   thinkingBlocks: string[],
-  todoManager: TodoManager,
-  usage: { totalInputTokens: number; totalOutputTokens: number; totalCacheCreationTokens: number; totalCacheReadTokens: number },
-  usageByModel?: UsageByModel
+  todoManager: TodoManager
 ): AgentResult {
   const todos = todoManager.getAll()
 
@@ -241,14 +230,7 @@ function buildInterruptedResult(
     interrupted: {
       reason,
       iterationsCompleted: iteration
-    },
-    usage: {
-      totalInputTokens: usage.totalInputTokens,
-      totalOutputTokens: usage.totalOutputTokens,
-      cacheCreationInputTokens: usage.totalCacheCreationTokens > 0 ? usage.totalCacheCreationTokens : undefined,
-      cacheReadInputTokens: usage.totalCacheReadTokens > 0 ? usage.totalCacheReadTokens : undefined
-    },
-    usageByModel: usageByModel && Object.keys(usageByModel).length > 0 ? usageByModel : undefined
+    }
   }
 }
 
@@ -278,14 +260,6 @@ export async function executeLoop(
   const toolCallLogs: ToolCallLog[] = []
   const thinkingBlocks: string[] = []
   const toolSchemas = toolsToSchemas(tools)
-
-  let totalInputTokens = 0
-  let totalOutputTokens = 0
-  let totalCacheCreationTokens = 0
-  let totalCacheReadTokens = 0
-
-  // Track usage by model
-  const usageByModel: UsageByModel = {}
   const modelId = llm.getModelId?.() || 'unknown'
 
   for (let iteration = 0; iteration < maxIterations; iteration++) {
@@ -302,9 +276,7 @@ export async function executeLoop(
         messages,
         toolCallLogs,
         thinkingBlocks,
-        todoManager,
-        { totalInputTokens, totalOutputTokens, totalCacheCreationTokens, totalCacheReadTokens },
-        usageByModel
+        todoManager
       )
     }
 
@@ -329,20 +301,8 @@ export async function executeLoop(
     )
     const llmDurationMs = Date.now() - llmStartTime
 
-    // Track usage
+    // Record usage in trace
     if (response.usage) {
-      totalInputTokens += response.usage.inputTokens
-      totalOutputTokens += response.usage.outputTokens
-
-      // Track by model
-      if (!usageByModel[modelId]) {
-        usageByModel[modelId] = { inputTokens: 0, outputTokens: 0, calls: 0 }
-      }
-      usageByModel[modelId].inputTokens += response.usage.inputTokens
-      usageByModel[modelId].outputTokens += response.usage.outputTokens
-      usageByModel[modelId].calls += 1
-
-      // Record in trace
       traceBuilder?.recordLLMCall(
         modelId,
         response.usage.inputTokens,
@@ -351,18 +311,6 @@ export async function executeLoop(
         response.cacheUsage?.cacheCreationInputTokens,
         response.cacheUsage?.cacheReadInputTokens
       )
-    }
-    if (response.cacheUsage) {
-      totalCacheCreationTokens += response.cacheUsage.cacheCreationInputTokens
-      totalCacheReadTokens += response.cacheUsage.cacheReadInputTokens
-
-      // Track cache usage by model
-      if (usageByModel[modelId]) {
-        usageByModel[modelId].cacheCreationInputTokens =
-          (usageByModel[modelId].cacheCreationInputTokens || 0) + response.cacheUsage.cacheCreationInputTokens
-        usageByModel[modelId].cacheReadInputTokens =
-          (usageByModel[modelId].cacheReadInputTokens || 0) + response.cacheUsage.cacheReadInputTokens
-      }
     }
 
     // Collect thinking blocks
@@ -403,14 +351,7 @@ export async function executeLoop(
         toolCalls: toolCallLogs,
         thinking: thinkingBlocks.length > 0 ? thinkingBlocks : undefined,
         todos: todos.length > 0 ? todos : undefined,
-        status: 'complete',
-        usage: {
-          totalInputTokens,
-          totalOutputTokens,
-          cacheCreationInputTokens: totalCacheCreationTokens > 0 ? totalCacheCreationTokens : undefined,
-          cacheReadInputTokens: totalCacheReadTokens > 0 ? totalCacheReadTokens : undefined
-        },
-        usageByModel: Object.keys(usageByModel).length > 0 ? usageByModel : undefined
+        status: 'complete'
       }
 
       logger?.onComplete?.(result)
@@ -438,9 +379,7 @@ export async function executeLoop(
           messages,
           toolCallLogs,
           thinkingBlocks,
-          todoManager,
-          { totalInputTokens, totalOutputTokens, totalCacheCreationTokens, totalCacheReadTokens },
-          usageByModel
+          todoManager
         )
       }
 
@@ -487,14 +426,7 @@ export async function executeLoop(
           thinking: thinkingBlocks.length > 0 ? thinkingBlocks : undefined,
           todos: todos.length > 0 ? todos : undefined,
           pendingQuestion,
-          status: 'needs_input',
-          usage: {
-            totalInputTokens,
-            totalOutputTokens,
-            cacheCreationInputTokens: totalCacheCreationTokens > 0 ? totalCacheCreationTokens : undefined,
-            cacheReadInputTokens: totalCacheReadTokens > 0 ? totalCacheReadTokens : undefined
-          },
-          usageByModel: Object.keys(usageByModel).length > 0 ? usageByModel : undefined
+          status: 'needs_input'
         }
       }
 
@@ -552,8 +484,6 @@ export async function executeLoop(
     messages,
     toolCallLogs,
     thinkingBlocks,
-    todoManager,
-    { totalInputTokens, totalOutputTokens, totalCacheCreationTokens, totalCacheReadTokens },
-    usageByModel
+    todoManager
   )
 }

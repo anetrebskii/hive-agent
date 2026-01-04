@@ -56,15 +56,6 @@ export class ClaudeProvider implements LLMProvider {
       tools: anthropicTools.length > 0 ? anthropicTools : undefined
     }
 
-    // Add extended thinking if enabled
-    if (options.thinkingMode === 'enabled') {
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      (requestParams as any).thinking = {
-        type: 'enabled',
-        budget_tokens: options.thinkingBudget || 10000
-      }
-    }
-
     const response = await this.client.messages.create(requestParams)
 
     return this.convertResponse(response)

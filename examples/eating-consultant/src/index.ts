@@ -555,28 +555,19 @@ async function main() {
           })
         }
 
-        // Show usage by model (from final result)
-        if (finalResult.usageByModel && Object.keys(finalResult.usageByModel).length > 0) {
-          console.log('\n📊 Usage by model:')
-          for (const [modelId, modelUsage] of Object.entries(finalResult.usageByModel)) {
-            let line = `  ${modelId}: ${modelUsage.inputTokens} in / ${modelUsage.outputTokens} out (${modelUsage.calls} calls)`
-            if (modelUsage.cacheCreationInputTokens || modelUsage.cacheReadInputTokens) {
-              const cacheWrite = modelUsage.cacheCreationInputTokens || 0
-              const cacheRead = modelUsage.cacheReadInputTokens || 0
-              line += ` [cache: +${cacheWrite}, ${cacheRead}]`
+        // Show usage from trace
+        if (finalResult.trace) {
+          const trace = finalResult.trace
+          console.log('\n📊 Usage:')
+          console.log(`  Total: ${trace.totalInputTokens} in / ${trace.totalOutputTokens} out`)
+          if (trace.totalCost > 0) {
+            console.log(`  Cost: $${trace.totalCost.toFixed(4)}`)
+          }
+          if (trace.costByModel && Object.keys(trace.costByModel).length > 0) {
+            for (const [modelId, modelUsage] of Object.entries(trace.costByModel)) {
+              console.log(`  ${modelId}: ${modelUsage.inputTokens} in / ${modelUsage.outputTokens} out (${modelUsage.calls} calls)`)
             }
-            console.log(line)
           }
-        } else if (finalResult.usage) {
-          // Fallback to total usage if usageByModel not available
-          let usage = `[${finalResult.usage.totalInputTokens} in / ${finalResult.usage.totalOutputTokens} out`
-          if (finalResult.usage.cacheCreationInputTokens || finalResult.usage.cacheReadInputTokens) {
-            const cacheWrite = finalResult.usage.cacheCreationInputTokens || 0
-            const cacheRead = finalResult.usage.cacheReadInputTokens || 0
-            usage += ` | cache: +${cacheWrite} write, ${cacheRead} read`
-          }
-          usage += ']'
-          console.log(`\n${usage}`)
         }
 
         // Check if a plan was saved to context

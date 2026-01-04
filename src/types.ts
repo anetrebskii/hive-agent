@@ -140,8 +140,6 @@ export interface CacheUsage {
 }
 
 export interface LLMOptions {
-  thinkingMode?: 'none' | 'enabled'
-  thinkingBudget?: number
   model?: string
 }
 
@@ -216,10 +214,6 @@ export interface HiveConfig {
   maxIterations?: number
   maxContextTokens?: number
   contextStrategy?: ContextStrategy
-
-  thinkingMode?: 'none' | 'enabled'
-  thinkingBudget?: number
-
 
   /** Disable __ask_user__ tool (used for sub-agents that shouldn't pause for input) */
   disableAskUser?: boolean
@@ -331,30 +325,7 @@ export interface AgentResult {
     iterationsCompleted: number
   }
 
-  usage?: {
-    totalInputTokens: number
-    totalOutputTokens: number
-    cacheCreationInputTokens?: number
-    cacheReadInputTokens?: number
-  }
-
-  /**
-   * Usage breakdown by provider and model.
-   * Key format: "provider:model" (e.g., "claude:claude-3-haiku-20240307")
-   */
-  usageByModel?: Record<string, {
-    inputTokens: number
-    outputTokens: number
-    cacheCreationInputTokens?: number
-    cacheReadInputTokens?: number
-    /** Number of API calls made with this model */
-    calls: number
-  }>
-
-  /**
-   * Execution trace with full hierarchy and cost breakdown.
-   * Only present if a TraceProvider was configured.
-   */
+  /** Execution trace with usage, costs, and timing (when trace provider configured) */
   trace?: import('./trace.js').Trace
 }
 
