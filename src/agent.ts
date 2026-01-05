@@ -270,7 +270,7 @@ Usage:
 
         // Start sub-agent span in trace
         if (parentTraceBuilder) {
-          parentTraceBuilder.startSubAgent(agentName)
+          parentTraceBuilder.startSubAgent(agentName, inputMessage)
         }
 
         const subHive = new Hive({
@@ -299,7 +299,7 @@ Usage:
         if (parentTraceBuilder) {
           const status = result.status === 'complete' ? 'complete' :
                          result.status === 'interrupted' ? 'interrupted' : 'error'
-          parentTraceBuilder.endSubAgent(status)
+          parentTraceBuilder.endSubAgent(status, result.response)
         }
 
         // Log sub-agent completion with details
@@ -557,7 +557,8 @@ export class Hive {
       this.config.trace
         ? new TraceBuilder(
             this.config.agentName || 'agent',
-            this.config.trace
+            this.config.trace,
+            message  // Pass input message to trace
           )
         : undefined
     )
@@ -593,7 +594,7 @@ export class Hive {
     if (traceBuilder && !options._traceBuilder) {
       const status = result.status === 'complete' ? 'complete' :
                      result.status === 'interrupted' ? 'interrupted' : 'complete'
-      result.trace = traceBuilder.endTrace(status)
+      result.trace = traceBuilder.endTrace(status, result.response)
     }
 
     return result

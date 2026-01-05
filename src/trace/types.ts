@@ -93,6 +93,10 @@ export interface AgentSpan {
   endTime?: number
   durationMs?: number
   status?: 'running' | 'complete' | 'error' | 'interrupted'
+  /** Input message that started this agent */
+  inputMessage?: string
+  /** Final response from this agent */
+  outputResponse?: string
   events: TraceEvent[]
   children: AgentSpan[]
   // Aggregated metrics

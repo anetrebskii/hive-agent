@@ -18,6 +18,10 @@ export interface ConsoleTraceConfig {
   showToolCalls?: boolean
   /** Show cost breakdown */
   showCosts?: boolean
+  /** Show input/output messages for agents */
+  showMessages?: boolean
+  /** Max length for message previews (default: 80) */
+  maxMessageLength?: number
   /** Indentation string */
   indent?: string
   /** Use colors (ANSI) */
@@ -38,10 +42,21 @@ export class ConsoleTraceProvider implements TraceProvider {
       showLLMCalls: config.showLLMCalls ?? true,
       showToolCalls: config.showToolCalls ?? true,
       showCosts: config.showCosts ?? true,
+      showMessages: config.showMessages ?? true,
+      maxMessageLength: config.maxMessageLength ?? 80,
       indent: config.indent ?? '  ',
       colors: config.colors ?? true
     }
     this.modelPricing = config.modelPricing
+  }
+
+  private truncate(text: string | undefined, maxLength?: number): string {
+    if (!text) return ''
+    const max = maxLength ?? this.config.maxMessageLength
+    // Replace newlines with spaces for single-line display
+    const singleLine = text.replace(/\n/g, ' ').trim()
+    if (singleLine.length <= max) return singleLine
+    return singleLine.slice(0, max - 3) + '...'
   }
 
   private getIndent(depth: number): string {
@@ -109,7 +124,15 @@ export class ConsoleTraceProvider implements TraceProvider {
     const indent = this.getIndent(span.depth)
     const icon = span.depth === 0 ? '🤖' : '🔹'
     const path = span.depth > 0 ? this.color(this.getPath(span), '2') : this.color(span.agentName, '1;32')
-    console.log(`${indent}${icon} ${path} started`)
+    let line = `${indent}${icon} ${path} started`
+
+    // Show input message preview if available and enabled
+    if (this.config.showMessages && span.inputMessage) {
+      const preview = this.truncate(span.inputMessage)
+      line += `\n${indent}   ${this.color('↳', '2')} ${this.color(preview, '2')}`
+    }
+
+    console.log(line)
   }
 
   onAgentEnd(span: AgentSpan, _trace: Trace): void {
@@ -127,6 +150,12 @@ export class ConsoleTraceProvider implements TraceProvider {
       line += `, ${this.formatCost(span.totalCost)}`
     }
     line += ')'
+
+    // Show output response preview if available and enabled
+    if (this.config.showMessages && span.outputResponse) {
+      const preview = this.truncate(span.outputResponse)
+      line += `\n${indent}   ${this.color('↳', '2')} ${this.color(preview, '2')}`
+    }
 
     console.log(line)
   }

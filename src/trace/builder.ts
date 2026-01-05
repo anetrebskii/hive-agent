@@ -26,7 +26,8 @@ export class TraceBuilder {
 
   constructor(
     agentName: string,
-    provider?: TraceProvider
+    provider?: TraceProvider,
+    inputMessage?: string
   ) {
     this.provider = provider
     this.pricing = provider?.modelPricing
@@ -38,6 +39,7 @@ export class TraceBuilder {
       agentName,
       depth: 0,
       startTime: Date.now(),
+      inputMessage,
       events: [],
       children: [],
       totalCost: 0,
@@ -90,7 +92,7 @@ export class TraceBuilder {
   /**
    * Start a sub-agent span
    */
-  startSubAgent(agentName: string): AgentSpan {
+  startSubAgent(agentName: string, inputMessage?: string): AgentSpan {
     const parentSpan = this.getCurrentSpan()
     const span: AgentSpan = {
       type: 'agent',
@@ -101,6 +103,7 @@ export class TraceBuilder {
       depth: parentSpan.depth + 1,
       startTime: Date.now(),
       status: 'running',
+      inputMessage,
       events: [],
       children: [],
       totalCost: 0,
@@ -122,7 +125,7 @@ export class TraceBuilder {
   /**
    * End the current sub-agent span
    */
-  endSubAgent(status: 'complete' | 'error' | 'interrupted' = 'complete'): void {
+  endSubAgent(status: 'complete' | 'error' | 'interrupted' = 'complete', outputResponse?: string): void {
     if (this.spanStack.length <= 1) {
       return // Don't pop the root span
     }
@@ -131,6 +134,7 @@ export class TraceBuilder {
     span.endTime = Date.now()
     span.durationMs = span.endTime - span.startTime
     span.status = status
+    span.outputResponse = outputResponse
 
     // Propagate metrics to parent
     const parentSpan = this.getCurrentSpan()
@@ -254,11 +258,12 @@ export class TraceBuilder {
   /**
    * End the trace
    */
-  endTrace(status: 'complete' | 'error' | 'interrupted' = 'complete'): Trace {
+  endTrace(status: 'complete' | 'error' | 'interrupted' = 'complete', outputResponse?: string): Trace {
     const rootSpan = this.trace.rootSpan
     rootSpan.endTime = Date.now()
     rootSpan.durationMs = rootSpan.endTime - rootSpan.startTime
     rootSpan.status = status
+    rootSpan.outputResponse = outputResponse
 
     this.trace.endTime = Date.now()
     this.trace.durationMs = this.trace.endTime - this.trace.startTime
