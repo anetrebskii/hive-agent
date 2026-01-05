@@ -563,8 +563,9 @@ async function main() {
             console.log(`  Cost: $${trace.totalCost.toFixed(4)}`)
           }
           if (trace.costByModel && Object.keys(trace.costByModel).length > 0) {
-            for (const [modelId, modelUsage] of Object.entries(trace.costByModel)) {
-              console.log(`  ${modelId}: ${modelUsage.inputTokens} in / ${modelUsage.outputTokens} out (${modelUsage.calls} calls)`)
+            for (const modelId of Object.keys(trace.costByModel)) {
+              const usage = trace.costByModel[modelId]
+              console.log(`  ${modelId}: ${usage.inputTokens} in / ${usage.outputTokens} out (${usage.calls} calls)`)
             }
           }
         }
