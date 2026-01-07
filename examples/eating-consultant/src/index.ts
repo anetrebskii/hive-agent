@@ -23,8 +23,7 @@ function getOptionDescription(opt: string | QuestionOption): string | undefined 
 // Display a single enhanced question
 function displayEnhancedQuestion(q: EnhancedQuestion, index: number): void {
   const header = q.header ? `[${q.header}] ` : ''
-  const multiNote = q.multiSelect ? ' (select multiple, comma-separated)' : ''
-  console.log(`\n${header}${q.question}${multiNote}`)
+  console.log(`\n${header}${q.question}`)
 
   if (q.options && q.options.length > 0) {
     q.options.forEach((opt, i) => {
@@ -41,29 +40,23 @@ function displayEnhancedQuestion(q: EnhancedQuestion, index: number): void {
 async function collectAnswer(
   rl: readline.Interface,
   q: EnhancedQuestion
-): Promise<string | string[]> {
-  const promptText = q.multiSelect ? 'Your choices: ' : 'Your choice: '
-
+): Promise<string> {
   return new Promise((resolve) => {
-    rl.question(promptText, (input) => {
+    rl.question('Your choice: ', (input) => {
       const trimmed = input.trim()
 
-      // If options exist, try to parse as numbers
+      // If options exist, try to parse as number
       if (q.options && q.options.length > 0) {
-        const parts = trimmed.split(',').map(s => s.trim())
-        const indices = parts.map(s => parseInt(s) - 1)
-        const validIndices = indices.filter(i => !isNaN(i) && i >= 0 && i < q.options!.length)
-
-        if (validIndices.length > 0) {
-          // User entered valid option numbers
-          const selected = validIndices.map(i => getOptionLabel(q.options![i]))
-          resolve(q.multiSelect ? selected : selected[0])
+        const index = parseInt(trimmed) - 1
+        if (!isNaN(index) && index >= 0 && index < q.options.length) {
+          // User entered a valid option number
+          resolve(getOptionLabel(q.options[index]))
           return
         }
       }
 
       // Not a number or no options - use as custom text
-      resolve(q.multiSelect ? trimmed.split(',').map(s => s.trim()) : trimmed)
+      resolve(trimmed)
     })
   })
 }
@@ -73,7 +66,7 @@ async function handleMultiQuestion(
   rl: readline.Interface,
   questions: EnhancedQuestion[]
 ): Promise<string> {
-  const answers: Record<string, string | string[]> = {}
+  const answers: Record<string, string> = {}
 
   for (let i = 0; i < questions.length; i++) {
     const q = questions[i]

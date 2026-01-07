@@ -61,7 +61,6 @@ interface EnhancedQuestion {
   question: string      // Full question text
   header?: string       // Short label for UI (max 12 chars), e.g., "Database"
   options?: (string | QuestionOption)[]  // 2-4 choices
-  multiSelect?: boolean // Allow multiple selections (default: false)
 }
 
 interface PendingQuestion {
@@ -280,7 +279,7 @@ When the agent asks multiple questions at once:
 ```typescript
 // Agent returns questions array
 if (result.pendingQuestion?.questions) {
-  const answers: Record<string, string | string[]> = {}
+  const answers: Record<string, string> = {}
 
   for (const q of result.pendingQuestion.questions) {
     console.log(`\n${q.header || 'Question'}: ${q.question}`)
@@ -293,10 +292,8 @@ if (result.pendingQuestion?.questions) {
       })
     }
 
-    const answer = await getUserInput(q.multiSelect ? '(comma-separated)' : '')
-    answers[q.header || q.question] = q.multiSelect
-      ? answer.split(',').map(s => s.trim())
-      : answer
+    const answer = await getUserInput()
+    answers[q.header || q.question] = answer
   }
 
   // Continue with all answers as JSON
@@ -310,21 +307,12 @@ if (result.pendingQuestion?.questions) {
 
 ```tsx
 function MultiQuestionUI({ questions, onAnswer }) {
-  const [answers, setAnswers] = useState<Record<string, string | string[]>>({})
+  const [answers, setAnswers] = useState<Record<string, string>>({})
 
   function handleOptionClick(questionIndex: number, option: string) {
     const q = questions[questionIndex]
     const key = q.header || `q${questionIndex}`
-
-    if (q.multiSelect) {
-      const current = (answers[key] as string[]) || []
-      const updated = current.includes(option)
-        ? current.filter(o => o !== option)
-        : [...current, option]
-      setAnswers({ ...answers, [key]: updated })
-    } else {
-      setAnswers({ ...answers, [key]: option })
-    }
+    setAnswers({ ...answers, [key]: option })
   }
 
   function handleSubmit() {
@@ -343,9 +331,7 @@ function MultiQuestionUI({ questions, onAnswer }) {
               const label = typeof opt === 'string' ? opt : opt.label
               const desc = typeof opt === 'object' ? opt.description : undefined
               const key = q.header || `q${qi}`
-              const selected = q.multiSelect
-                ? (answers[key] as string[])?.includes(label)
-                : answers[key] === label
+              const selected = answers[key] === label
 
               return (
                 <button

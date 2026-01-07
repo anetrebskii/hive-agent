@@ -283,8 +283,6 @@ export interface EnhancedQuestion {
   header?: string
   /** Available choices - can be simple strings or objects with label/description */
   options?: (string | QuestionOption)[]
-  /** Allow multiple options to be selected (default: false) */
-  multiSelect?: boolean
 }
 
 /**

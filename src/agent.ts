@@ -42,17 +42,15 @@ Supports two formats:
          "options": [
            { "label": "PostgreSQL", "description": "Best for complex queries" },
            { "label": "MongoDB", "description": "Best for flexible schemas" }
-         ],
-         "multiSelect": false
+         ]
        },
        {
-         "question": "Which features do you need?",
-         "header": "Features",
+         "question": "Which caching strategy?",
+         "header": "Caching",
          "options": [
-           { "label": "Auth", "description": "User authentication" },
-           { "label": "Cache", "description": "Redis caching layer" }
-         ],
-         "multiSelect": true
+           { "label": "Redis", "description": "Distributed caching" },
+           { "label": "In-memory", "description": "Local caching only" }
+         ]
        }
      ]
    }
@@ -60,8 +58,7 @@ Supports two formats:
 Usage:
 - Use when requirements are ambiguous
 - Use when you need the user to make a decision
-- Use questions array for multiple related decisions
-- Use multiSelect: true when choices aren't mutually exclusive`,
+- Use questions array for multiple related decisions`,
     parameters: {
       type: 'object',
       properties: {
@@ -75,7 +72,7 @@ Usage:
         },
         questions: {
           type: 'array',
-          description: 'Array of 1-4 questions for multi-question format. Each item has: question (string), header (short label), options (array of {label, description}), multiSelect (boolean). Use this OR question, not both.'
+          description: 'Array of 1-4 questions for multi-question format. Each item has: question (string), header (short label), options (array of {label, description}). Use this OR question, not both.'
         }
       },
       required: []
