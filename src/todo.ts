@@ -211,7 +211,7 @@ export class TodoManager {
 export function createTodoTool(manager: TodoManager): Tool {
   return {
     name: "__todo__",
-    description: `Use this tool to create and manage a structured task list for your current coding session. This helps you track progress, organize complex tasks, and demonstrate thoroughness to the user.
+    description: `Use this tool to create and manage a structured task list for your current work session. This helps you track progress, organize complex tasks, and demonstrate thoroughness to the user.
 It also helps the user understand the progress of the task and overall progress of their requests.
 
 ## When to Use This Tool
@@ -223,7 +223,8 @@ Use this tool proactively in these scenarios:
 4. User provides multiple tasks - When users provide a list of things to be done (numbered or comma-separated)
 5. After receiving new instructions - Immediately capture user requirements as todos
 6. When you start working on a task - Mark it as in_progress BEFORE beginning work. Ideally you should only have one todo as in_progress at a time
-7. After completing a task - Mark it as completed and add any new follow-up tasks discovered during implementation
+7. After completing a task - Mark it as completed and add any new follow-up tasks discovered during execution
+8. NEVER add tasks about calling agent tools.
 
 ## When NOT to Use This Tool
 
@@ -238,111 +239,113 @@ NOTE that you should not use this tool if there is only one trivial task to do. 
 ## Examples of When to Use the Todo List
 
 <example>
-User: I want to add a dark mode toggle to the application settings. Make sure you run the tests and build when you're done!
-Assistant: I'll help add a dark mode toggle to your application settings. Let me create a todo list to track this implementation.
+User: I need to plan a three-day trip to Paris. Include hotel bookings, restaurant reservations, and museum visits.
+Assistant: I'll help you plan your Paris trip. Let me create a todo list to organize all the components.
 *Creates todo list with the following items:*
-1. Creating dark mode toggle component in Settings page
-2. Adding dark mode state management (context/store)
-3. Implementing CSS-in-JS styles for dark theme
-4. Updating existing components to support theme switching
-5. Running tests and build process, addressing any failures or errors that occur
+1. Researching and recommending hotels in central Paris
+2. Creating day-by-day itinerary with museum visits
+3. Suggesting restaurants for each meal with reservation details
+4. Adding transportation options between locations
+5. Compiling final trip document with all bookings and confirmations
 *Begins working on the first task*
 
 <reasoning>
 The assistant used the todo list because:
-1. Adding dark mode is a multi-step feature requiring UI, state management, and styling changes
-2. The user explicitly requested tests and build be run afterward
-3. The assistant inferred that tests and build need to pass by adding "Ensure tests and build succeed" as the final task
+1. Trip planning is a multi-step process requiring research across multiple categories
+2. The user specified several distinct components (hotels, restaurants, museums)
+3. This is a complex task that benefits from systematic tracking
+4. The checklist ensures nothing is overlooked in the planning process
 </reasoning>
 </example>
 
 <example>
-User: Help me rename the function getCwd to getCurrentWorkingDirectory across my project
-Assistant: Let me first search through your codebase to find all occurrences of 'getCwd'.
-*Uses grep or search tools to locate all instances of getCwd in the codebase*
-Assistant: I've found 15 instances of 'getCwd' across 8 different files. Let me create a todo list to track these changes.
-*Creates todo list with specific items for each file that needs updating*
+User: Help me organize my research paper on climate change. I need to restructure the sections, add citations, and create a bibliography.
+Assistant: Let me first review your current paper structure to understand what needs to be reorganized.
+*Reviews the document and identifies organizational issues*
+Assistant: I've reviewed your paper and identified several areas that need attention. Let me create a todo list to track these improvements.
+*Creates todo list with specific items for each section that needs restructuring, citation additions, and bibliography formatting*
 
 <reasoning>
 The assistant used the todo list because:
-1. First, the assistant searched to understand the scope of the task
-2. Upon finding multiple occurrences across different files, it determined this was a complex task with multiple steps
-3. The todo list helps ensure every instance is tracked and updated systematically
-4. This approach prevents missing any occurrences and maintains code consistency
-</reasoning>
-</example>
-
-
-<example>
-User: I need to implement these features for my e-commerce site: user registration, product catalog, shopping cart, and checkout flow.
-Assistant: I'll help implement these features. First, let's add all the features to the todo list.
-*Creates a todo list breaking down each feature into specific tasks based on the project architecture*
-Assistant: Let's start with user registration. This will involve creating database models, API endpoints, and frontend forms that integrate with your existing authentication system.
-
-<reasoning>
-The assistant used the todo list because:
-1. The user provided multiple complex features to implement in a comma separated list
-2. The todo list helps organize these large features into manageable tasks
-3. This approach allows for tracking progress across the entire implementation
+1. First, the assistant reviewed the document to understand its scope
+2. Upon analysis, it identified this requires multiple distinct operations
+3. The todo list helps ensure each section is properly addressed
+4. This systematic approach maintains consistency throughout the document
 </reasoning>
 </example>
 
 <example>
-User: Can you help optimize my React application? It's rendering slowly and has performance issues.</user>
-Assistant: I'll help optimize your React application. First, let me examine your codebase to identify potential performance bottlenecks.
-*Reviews component structure, render patterns, state management, and data fetching*
-Assistant: After analyzing your codebase, I've identified several performance issues. Let me create a todo list to track our optimization efforts.
-*Creates todo list with items like: 1) Implementing memoization for expensive calculations in ProductList, 2) Adding virtualization for long lists in Dashboard, 3) Optimizing image loading in Gallery component, 4) Fixing state update loops in ShoppingCart, 5) Reviewing bundle size and implementing code splitting*
-Let's start by implementing memoization for the expensive calculations in your ProductList component.</assistant>
+User: I want to redecorate my living room: new paint color, furniture arrangement, lighting fixtures, and window treatments.
+Assistant: I'll help you redecorate your living room. Let's organize these elements into a structured plan.
+*Creates a todo list breaking down each aspect into specific tasks with design considerations*
+Assistant: Let's start with selecting a paint color scheme. I'll need to consider your existing furniture, natural lighting, and the mood you want to create.
 
 <reasoning>
 The assistant used the todo list because:
-1. First, the assistant examined the codebase to identify specific performance issues
-2. Based on this analysis, it identified multiple optimization opportunities
-3. Performance optimization is a non-trivial task requiring multiple steps
-4. The todo list helps methodically track improvements across different components
-5. This systematic approach ensures all performance bottlenecks are addressed
+1. The user provided multiple distinct elements in a comma-separated list
+2. Interior design involves multiple coordinated decisions
+3. The todo list helps organize these interconnected design choices
+4. This approach ensures all elements work together cohesively
+</reasoning>
+</example>
+
+<example>
+User: My garden needs work. It looks messy and the plants aren't thriving.
+Assistant: I'll help improve your garden. First, let me understand the current state and identify the main issues.
+*Asks questions about garden size, current plants, sunlight, and soil conditions*
+Assistant: Based on your description, I've identified several improvements needed. Let me create a todo list to systematically address each issue.
+*Creates todo list with items like: 1) Removing overgrown weeds and dead plants, 2) Testing and amending soil pH and nutrients, 3) Reorganizing plant layout for better sunlight exposure, 4) Adding mulch for moisture retention, 5) Creating a watering schedule*
+Let's begin by clearing out the overgrown areas and removing plants that aren't thriving.
+
+<reasoning>
+The assistant used the todo list because:
+1. First, the assistant gathered information about the garden's condition
+2. Based on this assessment, it identified multiple improvement areas
+3. Garden renovation is a non-trivial task requiring sequential steps
+4. The todo list ensures each aspect is methodically addressed
+5. This organized approach leads to better overall results
 </reasoning>
 </example>
 
 ## Examples of When NOT to Use the Todo List
 
 <example>
-User: How do I print 'Hello World' in Python?
-Assistant: In Python, you can print "Hello World" with this simple code:
+User: What's a good recipe for chocolate chip cookies?
+Assistant: Here's a classic chocolate chip cookie recipe:
 
-python
-print("Hello World")
+**Ingredients:**
+- 2¼ cups all-purpose flour
+- 1 tsp baking soda
+- 1 cup butter, softened
+- ¾ cup sugar
+- ¾ cup brown sugar
+- 2 eggs
+- 2 tsp vanilla extract
+- 2 cups chocolate chips
 
-This will output the text "Hello World" to the console when executed.</assistant>
+**Instructions:**
+Mix dry ingredients, cream butter and sugars, add eggs and vanilla, combine with dry mixture, fold in chocolate chips. Bake at 375°F for 9-11 minutes.
 
 <reasoning>
-The assistant did not use the todo list because this is a single, trivial task that can be completed in one step. There's no need to track multiple tasks or steps for such a straightforward request.
+The assistant did not use the todo list because this is a straightforward informational request. The user is asking for a recipe, not requesting help to actually bake cookies through multiple steps. There's no task execution required.
 </reasoning>
 </example>
 
 <example>
-User: What does the git status command do?
-Assistant: The git status command shows the current state of your working directory and staging area. It displays which changes have been staged, which haven't, and which files aren't being tracked by Git. This is a fundamental command for understanding the current state of your repository before making commits.
+User: How long does it take to fly from New York to London?
+Assistant: A direct flight from New York to London typically takes about 7-8 hours. The exact duration depends on factors like wind patterns, the specific departure and arrival airports, and the flight path taken. Flights going eastbound are usually slightly shorter due to prevailing jet stream winds.
 
 <reasoning>
-The assistant did not use the todo list because this is an informational request with no actual coding task to complete. The user is simply asking for an explanation, not for the assistant to perform multiple steps or tasks.
+The assistant did not use the todo list because this is a simple informational query with no actionable tasks. The user wants information, not assistance with booking or planning that would require multiple steps.
 </reasoning>
 </example>
 
 <example>
-User: Run npm install for me and tell me what happens.
-Assistant: I'll run the npm install command for you.
-
-*Executes: npm install*
-
-The command completed successfully. Here's the output:
-[Output of npm install command]
-
-All dependencies have been installed according to your package.json file.
+User: Translate "Good morning" to Spanish for me.
+Assistant: "Good morning" in Spanish is "Buenos días."
 
 <reasoning>
-The assistant did not use the todo list because this is a single command execution with immediate results. There are no multiple steps to track or organize, making the todo list unnecessary for this straightforward task.
+The assistant did not use the todo list because this is a single, trivial task with an immediate answer. There are no multiple steps to organize or track, making the todo list unnecessary.
 </reasoning>
 </example>
 
@@ -354,8 +357,8 @@ The assistant did not use the todo list because this is a single command executi
    - completed: Task finished successfully
 
    **IMPORTANT**: Task descriptions must have two forms:
-   - content: The imperative form describing what needs to be done (e.g., "Run tests", "Build the project")
-   - activeForm: The present continuous form shown during execution (e.g., "Running tests", "Building the project")
+   - content: The imperative form describing what needs to be done (e.g., "Research hotels", "Create itinerary")
+   - activeForm: The present continuous form shown during execution (e.g., "Researching hotels", "Creating itinerary")
 
 2. **Task Management**:
    - Update task status in real-time as you work
@@ -366,24 +369,23 @@ The assistant did not use the todo list because this is a single command executi
 
 3. **Task Completion Requirements**:
    - ONLY mark a task as completed when you have FULLY accomplished it
-   - If you encounter errors, blockers, or cannot finish, keep the task as in_progress
+   - If you encounter obstacles, limitations, or cannot finish, keep the task as in_progress
    - When blocked, create a new task describing what needs to be resolved
    - Never mark a task as completed if:
-     - Tests are failing
+     - Requirements are not fully met
      - Implementation is partial
-     - You encountered unresolved errors
-     - You couldn't find necessary files or dependencies
+     - You encountered unresolved issues
+     - You couldn't obtain necessary information or resources
 
 4. **Task Breakdown**:
    - Create specific, actionable items
    - Break complex tasks into smaller, manageable steps
    - Use clear, descriptive task names
    - Always provide both forms:
-     - content: "Fix authentication bug"
-     - activeForm: "Fixing authentication bug"
+     - content: "Research restaurant options"
+     - activeForm: "Researching restaurant options"
 
 When in doubt, use this tool. Being proactive with task management demonstrates attentiveness and ensures you complete all requirements successfully.
-
     `,
 
     parameters: {
