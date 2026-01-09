@@ -207,16 +207,6 @@ function createTaskTool(hive: Hive, agents: SubAgentConfig[]): Tool {
     }
   }
 
-  // Add prompt for legacy agents
-  const hasLegacyAgent = agents.some((a) => !a.inputSchema);
-  if (hasLegacyAgent && !combinedProperties.prompt) {
-    combinedProperties.prompt = {
-      type: "string",
-      description:
-        "The task for the agent to perform (for agents without inputSchema)",
-    };
-  }
-
   const toolName = "__task__";
   return {
     name: toolName,
@@ -280,7 +270,6 @@ assistant: "I'll invoke the __task__ tool to activate the welcome-handler agent"
     execute: async (params, toolCtx) => {
       const { agent: agentName, ...inputParams } = params as {
         agent: string;
-        prompt?: string;
         [key: string]: unknown;
       };
 
@@ -290,18 +279,11 @@ assistant: "I'll invoke the __task__ tool to activate the welcome-handler agent"
       }
 
       // Build the input message for the sub-agent
-      let inputMessage: string;
-      if (agentConfig.inputSchema) {
-        // Schema-based: pass parameters as JSON
-        inputMessage = `Task parameters:\n${JSON.stringify(
-          inputParams,
-          null,
-          2
-        )}`;
-      } else {
-        // Legacy: use prompt directly
-        inputMessage = (inputParams.prompt as string) || "";
-      }
+      const inputMessage = `Task parameters:\n${JSON.stringify(
+        inputParams,
+        null,
+        2
+      )}`;
 
       // Log sub-agent start
       hive.config.logger?.info(`[Sub-Agent: ${agentName}] Starting...`);
@@ -504,9 +486,9 @@ assistant: "I'll invoke the __task__ tool to activate the welcome-handler agent"
           };
         }
 
-        // Legacy: return response text as summary
+        // Fallback: return response text as summary when __output__ tool wasn't used
         hive.config.logger?.debug(
-          `[Sub-Agent: ${agentName}] Returning legacy response`,
+          `[Sub-Agent: ${agentName}] Returning text response (no __output__ tool used)`,
           {
             responseLength: result.response?.length || 0,
             isEmpty: !result.response,
