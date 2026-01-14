@@ -263,7 +263,7 @@ assistant: "I'll invoke the __task__ tool to activate the welcome-handler agent"
           llm: subLlm,
           logger: subLogger,
           maxIterations: agentConfig.maxIterations || context.config.maxIterations,
-          disableAskUser: true, // Sub-agents return questions as text, not via __ask_user__
+          disableAskUser: false, // Sub-agents can ask questions via __ask_user__
           // Pass parent's trace config for nested sub-agents
           trace: context.config.trace,
           agentName: agentName,

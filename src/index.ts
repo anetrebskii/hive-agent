@@ -94,7 +94,32 @@ export {
   buildEnvironmentSection,
   buildRemindersSection,
   getCurrentEnvironment,
-  DEFAULT_SYSTEM_PROMPT
+  DEFAULT_SYSTEM_PROMPT,
+  // Prompt builders
+  MainAgentBuilder,
+  SubAgentBuilder,
+  // Template functions (for advanced customization)
+  roleSection,
+  subAgentsTable,
+  questionHandlingSection,
+  directToolsSection,
+  contextStorageSection,
+  rulesSection,
+  taskExamplesSection,
+  subAgentRoleSection,
+  taskSection,
+  workflowSection,
+  guidelinesSection,
+  outputSection,
+  // Builder types
+  type SubAgentDef,
+  type ToolDef,
+  type ContextPathDef,
+  type TaskExample,
+  type WorkflowStep,
+  type OutputFormat,
+  type MainAgentPromptConfig,
+  type SubAgentPromptConfig
 } from './prompt.js'
 
 // Todo utilities

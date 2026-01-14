@@ -2,6 +2,195 @@
 
 Context is a virtual filesystem that enables tools and sub-agents to share data. Instead of relying on text responses (which can be lost or truncated), Context provides a structured way to store and retrieve data.
 
+---
+
+## For AI Agents: How to Use Context
+
+This section is written for AI agents that need to interact with the context system.
+
+### Available Context Tools
+
+| Tool | Purpose | When to Use |
+|------|---------|-------------|
+| `context_ls` | List all paths in context | **FIRST** - Discover what data exists |
+| `context_read` | Read value from a path | Read data before asking user |
+| `context_write` | Write value to a path | Save results for persistence |
+
+### Critical Rule: Check Context BEFORE Asking Questions
+
+**ALWAYS** check context before using `__ask_user__`:
+
+```
+1. context_ls {}                              → See what paths exist
+2. context_read { "path": "user/prefs.json" } → Read relevant data
+3. Only if info NOT found → Use __ask_user__
+4. After work → context_write to save results
+```
+
+### Step-by-Step Usage
+
+#### Step 1: List Available Data
+
+Always start by discovering what's in context:
+
+```json
+// Call context_ls
+{ }
+
+// Or filter by prefix
+{ "prefix": "user/" }
+```
+
+Response tells you:
+- `items` - Existing data with path, preview, and who wrote it
+- `definedPaths` - Paths the app expects you to use
+- `strict` - If true, you can ONLY write to defined paths
+
+#### Step 2: Read Relevant Paths
+
+If `context_ls` shows relevant data, read it:
+
+```json
+// Call context_read
+{ "path": "user/preferences.json" }
+```
+
+Response:
+- `found: true/false` - Whether data exists
+- `value` - The actual data (if found)
+- `writtenBy` - Who saved this (e.g., "main_agent")
+- `updatedAt` - When it was last updated
+
+#### Step 3: Write Your Results
+
+After completing work, save important data:
+
+```json
+// Call context_write
+{
+  "path": "plan/current.json",
+  "value": {
+    "title": "5-Day Meal Plan",
+    "goal": "weight_loss",
+    "days": [...]
+  }
+}
+```
+
+### Path Naming Conventions
+
+Paths use forward slashes with file extensions:
+
+| Extension | Data Type | Example |
+|-----------|-----------|---------|
+| `.json` | Object or Array | `meals/today.json`, `user/prefs.json` |
+| `.md` | Markdown string | `notes/advice.md`, `report/summary.md` |
+| `.txt` | Plain text | `logs/debug.txt` |
+| `.num` | Number | `stats/total.num` |
+| `.bool` | Boolean | `flags/completed.bool` |
+
+### Common Mistakes to Avoid
+
+#### 1. Don't stringify JSON values
+
+```json
+// WRONG - passing string instead of object
+{ "path": "data.json", "value": "{\"name\": \"Alex\"}" }
+
+// CORRECT - pass actual object
+{ "path": "data.json", "value": { "name": "Alex" } }
+```
+
+#### 2. Don't ask for data that exists in context
+
+```
+// WRONG flow:
+User: "Create a meal plan"
+Agent: Immediately asks "What's your goal?"
+
+// CORRECT flow:
+User: "Create a meal plan"
+Agent: context_ls {} → sees "user/preferences.json" exists
+Agent: context_read { "path": "user/preferences.json" } → gets { goal: "weight_loss" }
+Agent: Uses goal from context, doesn't ask user
+```
+
+#### 3. Don't write to wrong path type
+
+```json
+// WRONG - writing object to .md path
+{ "path": "notes.md", "value": { "text": "hello" } }
+
+// CORRECT - .md expects string
+{ "path": "notes.md", "value": "# Notes\n\nHello world" }
+```
+
+### Example Workflow: Meal Planning Agent
+
+```
+1. User asks: "Create a weekly meal plan"
+
+2. Check context first:
+   context_ls {}
+   → Shows: user/preferences.json, meals/today.json
+
+3. Read user preferences:
+   context_read { "path": "user/preferences.json" }
+   → Returns: { goal: "weight_loss", dailyCalories: 1800, restrictions: ["vegetarian"] }
+
+4. Check input parameters:
+   → User didn't specify days, but goal and calories are in context!
+
+5. Only ask what's truly missing:
+   __ask_user__ { questions: [{ question: "How many days?", options: ["3", "5", "7"] }] }
+
+6. Create the plan using context data + user answer
+
+7. Save result to context:
+   context_write {
+     "path": "plan/current.json",
+     "value": {
+       "title": "7-Day Vegetarian Weight Loss Plan",
+       "goal": "weight_loss",
+       "dailyCalories": 1800,
+       "days": [...]
+     }
+   }
+```
+
+### What Each Path Typically Contains
+
+Common path patterns and their typical content:
+
+| Path Pattern | Contains | Example Value |
+|--------------|----------|---------------|
+| `user/preferences.json` | User settings | `{ goal, dailyCalories, restrictions }` |
+| `user/profile.json` | User info | `{ name, age, weight }` |
+| `meals/today.json` | Today's log | `{ meals: [], totalCalories }` |
+| `plan/current.json` | Active plan | `{ title, days: [...] }` |
+| `notes/*.md` | Text notes | Markdown string |
+
+### Handling Validation Errors
+
+If `context_write` fails:
+
+```json
+{
+  "success": false,
+  "error": "Validation failed",
+  "data": {
+    "errors": [
+      { "path": "plan/current.json.title", "message": "Missing required property" }
+    ],
+    "expectedSchema": { ... }
+  }
+}
+```
+
+Fix by including required fields and correct types.
+
+---
+
 ## Basic Setup
 
 ```typescript

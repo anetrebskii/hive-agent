@@ -7,8 +7,8 @@
 
 import 'dotenv/config'
 import * as readline from 'readline'
-import { Hive, ClaudeProvider, ConsoleLogger, ConsoleTraceProvider, Context, RunRecorder, type Message, type SubAgentConfig, type ProgressUpdate, type PendingQuestion, type EnhancedQuestion, type QuestionOption } from '@alexnetrebskii/hive-agent'
-import { nutritionCounterTools, mainAgentTools } from './tools.js'
+import { Hive, ClaudeProvider, ConsoleLogger, ConsoleTraceProvider, Context, RunRecorder, MainAgentBuilder, SubAgentBuilder, type Message, type SubAgentConfig, type ProgressUpdate, type PendingQuestion, type EnhancedQuestion, type QuestionOption } from '@alexnetrebskii/hive-agent'
+import { nutritionCounterTools, mainAgentTools, searchFoodTool, logMealTool } from './tools.js'
 
 // Helper to get option label (works with both string and QuestionOption)
 function getOptionLabel(opt: string | QuestionOption): string {
@@ -130,13 +130,49 @@ function createProgressLogger() {
   }
 }
 
+// Define output schema for nutrition counter (used by both builder and config)
+const nutritionOutputSchema = {
+  type: 'object' as const,
+  properties: {
+    logged: { type: 'boolean', description: 'Whether the food was successfully logged' },
+    food: { type: 'string', description: 'Name of the food that was logged' },
+    calories: { type: 'number', description: 'Total calories for the portion' },
+    protein: { type: 'number', description: 'Protein in grams' },
+    carbs: { type: 'number', description: 'Carbs in grams' },
+    fat: { type: 'number', description: 'Fat in grams' }
+  },
+  required: ['logged', 'food', 'calories'] as string[]
+}
+
+// Build nutrition counter prompt using SubAgentBuilder (type-safe)
+const nutritionCounterPrompt = new SubAgentBuilder()
+  .role('a Nutrition Counter assistant')
+  .task('Log food the user ate.')
+  .tools(nutritionCounterTools)  // Auto-documents available tools
+  .addContextPath('meals/today.json', 'Today\'s nutrition totals and logged meals')
+  .addQuestionStep('Check for Missing Information', {
+    condition: 'If portionGrams is missing or 0',
+    question: 'What was the portion size?',
+    options: ['Small (150g)', 'Medium (250g)', 'Large (350g)']
+  })
+  .addQuestionStep('Ask for Meal Type', {
+    condition: 'If meal type is missing',
+    question: 'Which meal was this?',
+    options: ['Breakfast', 'Lunch', 'Dinner', 'Snack']
+  })
+  .addToolsStep('Search and Log', [
+    { tool: searchFoodTool, purpose: 'find nutrition data' },
+    { tool: logMealTool, purpose: 'log with nutrition per 100g scaled to portion' }
+  ])
+  .outputSchema(nutritionOutputSchema)  // Uses same schema as config
+  .build()
+
 // Nutrition Counter sub-agent - specialized in food lookup and tracking
-// Now using inputSchema and outputSchema for structured communication
 const nutritionCounterAgent: SubAgentConfig = {
   name: 'nutrition_counter',
-  description: `Specialized agent for logging food the user ate.`,
+  description: 'Specialized agent for logging food the user ate.',
+  systemPrompt: nutritionCounterPrompt,
 
-  // Structured input parameters - parent provides these, not free-form prompt
   inputSchema: {
     type: 'object',
     properties: {
@@ -146,123 +182,179 @@ const nutritionCounterAgent: SubAgentConfig = {
       },
       portionGrams: {
         type: 'number',
-        description: 'Portion size in grams'
+        description: 'Portion size in grams (agent will ask if not provided)'
       },
       meal: {
         type: 'string',
-        description: 'Meal type: breakfast, lunch, dinner, or snack'
+        description: 'Meal type: breakfast, lunch, dinner, or snack (agent will ask if not provided)'
       }
     },
-    required: ['food', 'portionGrams', 'meal']
+    required: ['food']
   },
 
-  // Structured output - what parent receives back
-  outputSchema: {
-    type: 'object',
-    properties: {
-      logged: {
-        type: 'boolean',
-        description: 'Whether the food was successfully logged'
-      },
-      food: {
-        type: 'string',
-        description: 'Name of the food that was logged'
-      },
-      calories: {
-        type: 'number',
-        description: 'Total calories for the portion'
-      },
-      protein: {
-        type: 'number',
-        description: 'Protein in grams'
-      },
-      carbs: {
-        type: 'number',
-        description: 'Carbs in grams'
-      },
-      fat: {
-        type: 'number',
-        description: 'Fat in grams'
-      }
-    },
-    required: ['logged', 'food', 'calories']
-  },
-
-  systemPrompt: `You are a Nutrition Counter assistant. Your task:
-
-1. You receive structured input with: food, portionGrams, meal
-2. Search OpenFoodFacts for the food
-3. Log the meal with accurate nutrition data
-4. Return structured output using __output__ tool
-
-## Workflow
-
-1. Parse the input parameters (food, portionGrams, meal)
-2. search_food(food) to find nutrition data
-3. log_meal with the nutrition per 100g scaled to portion
-4. Call __output__ with summary and structured data
-
-## CRITICAL: Always use __output__ tool
-
-When done, call __output__ with:
-- summary: Brief message like "Logged 250g pasta for breakfast: 350 kcal"
-- data: { logged: true, food: "...", calories: N, protein: N, carbs: N, fat: N }
-
-If food not found, return:
-- data: { logged: false, food: "...", calories: 0 }`,
+  outputSchema: nutritionOutputSchema,  // Reuses same schema
 
   tools: nutritionCounterTools
 }
 
-const SYSTEM_PROMPT = `You are a friendly nutrition consultant powered by real food data from OpenFoodFacts.
+// Define output schema for greeter
+const greeterOutputSchema = {
+  type: 'object' as const,
+  properties: {
+    greeting: { type: 'string', description: 'The greeting message to display' }
+  },
+  required: ['greeting'] as string[]
+}
 
-## Capabilities
+// Build greeter prompt using SubAgentBuilder
+const greeterPrompt = new SubAgentBuilder()
+  .role('a friendly greeter for a nutrition consultant app')
+  .task('Generate a warm, welcoming greeting for the user.')
+  .addContextPath('user/preferences.json', 'User preferences including name and language')
+  .addGuidelines([
+    'Be friendly and encouraging',
+    'Mention you can help with: logging meals, viewing nutrition progress, and meal planning',
+    'Keep it brief (2-3 sentences)',
+    'Use the language specified (Russian or English)',
+    'Adapt tone to time of day if provided'
+  ])
+  .outputSchema(greeterOutputSchema)
+  .build()
 
-1. **Log Meals** - Use nutrition_counter agent when users mention eating something
-2. **View Progress** - Show daily nutrition totals with get_daily_totals
-3. **Meal Planning** - Create meal plans, use todo list to track progress
-4. **Give Advice** - Provide nutrition guidance based on intake
+// Greeter sub-agent - handles initial greetings and welcomes
+const greeterAgent: SubAgentConfig = {
+  name: 'greeter',
+  description: 'Greet the user with a friendly welcome message',
+  systemPrompt: greeterPrompt,
 
-## Context Storage
+  inputSchema: {
+    type: 'object',
+    properties: {
+      userName: { type: 'string', description: 'User name if known (optional)' },
+      language: { type: 'string', description: 'Preferred language: "ru" for Russian, "en" for English' },
+      timeOfDay: { type: 'string', description: 'Time of day: morning, afternoon, evening' }
+    },
+    required: []
+  },
 
-Save important data to context:
+  outputSchema: greeterOutputSchema,
 
-- plan/current.json - Meal plans { title, goal, dailyCalories, days[] }
-- meals/today.json - Today's nutrition { totalCalories, totalProtein, totalCarbs, totalFat, meals[] }
-- user/preferences.json - User preferences { goal, restrictions[] }
-- notes/advice.md - Nutritional recommendations (markdown)
+  tools: []
+}
 
-Always save meal plans and user preferences to context.
+// Define output schema for meal planner
+const mealPlannerOutputSchema = {
+  type: 'object' as const,
+  properties: {
+    plan: { type: 'object', description: 'The meal plan object with title, goal, dailyCalories, and days array' },
+    summary: { type: 'string', description: 'Brief summary of the plan' }
+  },
+  required: ['plan', 'summary'] as string[]
+}
 
-## Workflow
+// Build meal planner prompt using SubAgentBuilder
+const mealPlannerPrompt = new SubAgentBuilder()
+  .role('a meal planning specialist')
+  .task('Gather requirements and create a detailed meal plan.')
+  .addContextPath('user/preferences.json', 'User preferences with goal and restrictions')
+  .addContextPath('meals/today.json', 'Today\'s nutrition totals')
+  // Enable todo tracking - AI creates own plan
+  .useTodoTracking({
+    exampleSteps: [
+      'Reading user preferences from context',
+      'Asking user about calorie target',
+      'Creating 5-day meal plan for weight loss',
+      'Saving plan to context'
+    ]
+  })
+  // Questions to ask if info is missing
+  .addQuestionStep('Gather Goal', {
+    condition: 'If goal is not in context and not provided',
+    question: "What's your goal?",
+    options: ['Weight loss', 'Muscle gain', 'Maintain weight', 'Eat healthier']
+  })
+  .addQuestionStep('Gather Daily Calories', {
+    condition: 'If daily calories is not provided',
+    question: "What's your daily calorie target?",
+    options: ['1500 kcal', '1800 kcal', '2000 kcal', '2500 kcal']
+  })
+  .addQuestionStep('Gather Days', {
+    condition: 'If days is not provided',
+    question: 'How many days should I plan?',
+    options: ['3 days', '5 days', '7 days']
+  })
+  // Guidelines for plan creation
+  .addGuidelines([
+    'Stay within ±100 calories of the daily target',
+    'Include variety across days',
+    'Balance macros appropriately for the goal'
+  ])
+  // Things to avoid
+  .constraints([
+    'Never suggest foods that conflict with dietary restrictions',
+    'Do not repeat the same meal on consecutive days',
+    'Avoid unrealistic portion sizes'
+  ])
+  // Example of expected output
+  .addExample(
+    'User wants 1800 kcal/day for weight loss, 3 days',
+    '{ plan: { title: "3-Day Weight Loss Plan", dailyCalories: 1800, days: [...] }, summary: "Created 3-day plan..." }',
+    'Each day totals ~1800 kcal with balanced macros'
+  )
+  .addSection('Plan Format', `Create a plan object:
+{
+  "title": "Plan name",
+  "goal": "User's goal",
+  "dailyCalories": number,
+  "days": [{ "day": "Monday", "meals": { breakfast, lunch, dinner, snacks }, "totalCalories": N }]
+}`)
+  .outputSchema(mealPlannerOutputSchema)
+  .build()
 
-### Logging meals
-When user says "I had chicken for lunch":
-1. Ask for portion if unclear (150g small, 250g medium, 350g large)
-2. Call nutrition_counter with { food, portionGrams, meal }
-3. Summarize: "Recorded chicken - 350 kcal"
+// Planner sub-agent - creates meal plans
+const plannerAgent: SubAgentConfig = {
+  name: 'meal_planner',
+  description: 'Create detailed meal plans based on user goals and preferences',
+  systemPrompt: mealPlannerPrompt,
 
-### Meal planning
-When user asks for a meal plan:
-1. Ask clarifying questions: goal, daily calories, restrictions
-2. Create todo list to track each day
-3. Write out the full plan with meals and calories
-4. Save plan to context
+  inputSchema: {
+    type: 'object',
+    properties: {
+      goal: { type: 'string', description: 'User goal: weight_loss, muscle_gain, maintenance, healthy (agent will ask if not provided)' },
+      dailyCalories: { type: 'number', description: 'Target daily calories (agent will ask if not provided)' },
+      restrictions: { type: 'array', description: 'Dietary restrictions: vegetarian, vegan, gluten-free, dairy-free, etc.' },
+      days: { type: 'number', description: 'Number of days to plan, 1-7 (agent will ask if not provided)' },
+      language: { type: 'string', description: 'Language for the plan: "ru" for Russian, "en" for English' }
+    },
+    required: []
+  },
 
-Example plan format:
-📅 **Понедельник** (~1800 ккал)
-🍳 Завтрак: Овсянка с ягодами (350 ккал)
-🍽️ Обед: Курица с рисом (500 ккал)
-🍲 Ужин: Рыба с овощами (400 ккал)
+  outputSchema: mealPlannerOutputSchema,
 
-## Rules
+  tools: []
+}
 
-- Ask clarifying questions before complex tasks
-- Use todo list for multi-step tasks
-- Be encouraging, never judgmental
-- Use Russian if user speaks Russian
+// All sub-agents for the main agent
+const subAgents = [greeterAgent, nutritionCounterAgent, plannerAgent]
 
-Start by greeting the user!`
+// Build main agent prompt using MainAgentBuilder
+// Uses .tools() and .agents() to extract descriptions from actual objects
+const SYSTEM_PROMPT = new MainAgentBuilder()
+  .role('the orchestrator of a nutrition consultant app')
+  .description('Your role is to delegate work to sub-agents and communicate with the user.')
+  .agents(subAgents)
+  .tools(mainAgentTools)
+  .questionHandling({})
+  .addContextPath('plan/current.json', 'Meal plans from meal_planner')
+  .addContextPath('user/preferences.json', 'User preferences { goal, restrictions[] }')
+  .addRules([
+    'Delegate first, never answer domain questions yourself',
+    'Always use __ask_user__ for questions, never write questions as plain text',
+    'Pass all relevant context from conversation history to sub-agents',
+    'Present results in a friendly, encouraging way',
+    'Use Russian if user speaks Russian'
+  ])
+  .build()
 
 async function main() {
   const apiKey = process.env.ANTHROPIC_API_KEY
@@ -334,7 +426,7 @@ async function main() {
   const agent = new Hive({
     systemPrompt: SYSTEM_PROMPT,
     tools: mainAgentTools,
-    agents: [nutritionCounterAgent],
+    agents: subAgents,
     llm: llmProvider,
     logger: createProgressLogger(),
     maxIterations: 15,
@@ -451,6 +543,8 @@ async function main() {
           context
         })
 
+        console.log('result', JSON.stringify(result));
+
         stopEscHandler()
         isProcessing = false
         currentController = null
@@ -469,12 +563,14 @@ async function main() {
 
         // Variable to track the final result to display
         let finalResult = result
+        let currentResult = result
 
-        if (result.status === 'needs_input' && result.pendingQuestion) {
-          displayPendingQuestion(result.pendingQuestion)
+        // Handle question/answer loop until complete or interrupted
+        while (currentResult.status === 'needs_input' && currentResult.pendingQuestion) {
+          displayPendingQuestion(currentResult.pendingQuestion)
 
           // Collect all answers and auto-continue
-          const combinedAnswer = await handleMultiQuestion(rl, result.pendingQuestion!.questions)
+          const combinedAnswer = await handleMultiQuestion(rl, currentResult.pendingQuestion!.questions)
           console.log('\n✅ Answers collected, continuing...\n')
 
           // Auto-continue with the collected answers
@@ -483,7 +579,7 @@ async function main() {
           setupEscHandler()
 
           const continuedResult = await agent.run(combinedAnswer, {
-            history: result.history,
+            history: currentResult.history,
             signal: currentController.signal,
             context
           })
@@ -492,20 +588,17 @@ async function main() {
           isProcessing = false
           currentController = null
 
-          // Use continued result for display
+          // Update for next iteration or final display
+          currentResult = continuedResult
           finalResult = continuedResult
           history = continuedResult.history
+        }
 
-          if (continuedResult.status === 'complete') {
-            console.log('\nAssistant:', continuedResult.response)
-          } else if (continuedResult.status === 'needs_input' && continuedResult.pendingQuestion) {
-            // Show follow-up questions
-            displayPendingQuestion(continuedResult.pendingQuestion)
-          } else if (continuedResult.status === 'interrupted') {
-            console.log(`\n⚠️  Task interrupted after ${continuedResult.interrupted?.iterationsCompleted} iterations`)
-          }
-        } else {
-          console.log('\nAssistant:', result.response)
+        // Show final result
+        if (currentResult.status === 'complete') {
+          console.log('\nAssistant:', currentResult.response)
+        } else if (currentResult.status === 'interrupted') {
+          console.log(`\n⚠️  Task interrupted after ${currentResult.interrupted?.iterationsCompleted} iterations`)
         }
 
         // Show todos if any (from final result)

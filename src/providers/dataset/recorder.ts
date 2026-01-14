@@ -70,9 +70,15 @@ export class RunRecorder {
     // Ensure output directory exists
     await mkdir(this.outputDir, { recursive: true })
 
-    // Save to file
+    // Save to file, stripping circular refs (parent/children)
     const filePath = join(this.outputDir, `${runId}.json`)
-    await writeFile(filePath, JSON.stringify(record, null, 2), 'utf-8')
+    const json = JSON.stringify(record, (key, value) => {
+      if (key === 'parent' || key === 'children') {
+        return undefined
+      }
+      return value
+    }, 2)
+    await writeFile(filePath, json, 'utf-8')
 
     return filePath
   }

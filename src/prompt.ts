@@ -97,3 +97,6 @@ You have access to tools that allow you to perform various tasks. Use them when 
 When you need clarification from the user, use the __ask_user__ tool to ask a question.
 
 Be concise and helpful in your responses.`
+
+// Re-export prompt builder module
+export * from './prompt/index.js'
