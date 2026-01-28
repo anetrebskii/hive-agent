@@ -4,7 +4,7 @@
  * Provides todo list functionality for agents to track and execute tasks.
  */
 
-import type { Tool, TodoItem, TodoStatus } from "../types.js";
+import type { Tool, TodoItem, TodoStatus, LogProvider, TodoProgress } from "../types.js";
 
 /**
  * Generate unique ID for todo items
@@ -205,10 +205,37 @@ export class TodoManager {
   }
 }
 
+export interface TodoToolOptions {
+  /** Logger for notifying UI about todo updates */
+  logger?: LogProvider
+  /** Agent name (for sub-agents) */
+  agentName?: string
+}
+
 /**
  * Create the __todo__ tool
  */
-export function createTodoTool(manager: TodoManager): Tool {
+export function createTodoTool(manager: TodoManager, options: TodoToolOptions = {}): Tool {
+  const { logger, agentName } = options;
+
+  /**
+   * Notify logger about todo list changes
+   */
+  function notifyTodoUpdate(action: 'set' | 'complete' | 'update'): void {
+    if (!logger?.onTodoUpdate) return;
+
+    const todos = manager.getAll();
+    const current = manager.getCurrentTask();
+    const progress = manager.getProgress();
+
+    logger.onTodoUpdate({
+      agentName,
+      action,
+      todos,
+      current: current || undefined,
+      progress,
+    });
+  }
   return {
     name: "__todo__",
     description: `Use this tool to create and manage a structured task list for your current work session. This helps you track progress, organize complex tasks, and demonstrate thoroughness to the user.
@@ -461,6 +488,9 @@ When in doubt, use this tool. Being proactive with task management demonstrates 
           const current = manager.getCurrentTask();
           const currentLabel = current?.activeForm || current?.content;
 
+          // Notify UI about new todo list
+          notifyTodoUpdate('set');
+
           return {
             success: true,
             data: {
@@ -499,6 +529,9 @@ When in doubt, use this tool. Being proactive with task management demonstrates 
           message += `Progress: ${progress.completed}/${progress.total}`;
 
           const nextLabel = next ? next.activeForm || next.content : undefined;
+
+          // Notify UI about task completion
+          notifyTodoUpdate('complete');
 
           return {
             success: true,

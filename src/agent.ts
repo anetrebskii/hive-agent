@@ -91,7 +91,13 @@ export class Hive {
     context?: Context,
     agentName?: string
   ): Tool[] {
-    const tools = [...this.tools, createTodoTool(todoManager)];
+    const tools = [
+      ...this.tools,
+      createTodoTool(todoManager, {
+        logger: this.config.logger,
+        agentName,
+      }),
+    ];
 
     // Add context tools if Context is provided
     if (context) {

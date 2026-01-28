@@ -18,4 +18,9 @@ export {
 } from "./task.js";
 
 // Todo Tool
-export { TodoManager, formatTodoList, createTodoTool } from "./todo.js";
+export {
+  TodoManager,
+  formatTodoList,
+  createTodoTool,
+  type TodoToolOptions,
+} from "./todo.js";

@@ -40,6 +40,8 @@ export type {
   TodoItem,
   TodoStatus,
   TodoList,
+  TodoProgress,
+  TodoUpdate,
 
   // Provider types
   LLMProvider,
@@ -125,7 +127,8 @@ export {
 // Todo utilities
 export {
   TodoManager,
-  formatTodoList
+  formatTodoList,
+  type TodoToolOptions
 } from './tools/todo.js'
 
 // Tracing

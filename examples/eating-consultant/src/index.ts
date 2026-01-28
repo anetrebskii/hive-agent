@@ -7,7 +7,7 @@
 
 import 'dotenv/config'
 import * as readline from 'readline'
-import { Hive, ClaudeProvider, ConsoleLogger, ConsoleTraceProvider, Context, RunRecorder, MainAgentBuilder, SubAgentBuilder, type Message, type SubAgentConfig, type ProgressUpdate, type PendingQuestion, type EnhancedQuestion, type QuestionOption } from '@alexnetrebskii/hive-agent'
+import { Hive, ClaudeProvider, ConsoleLogger, ConsoleTraceProvider, Context, RunRecorder, MainAgentBuilder, SubAgentBuilder, type Message, type SubAgentConfig, type ProgressUpdate, type PendingQuestion, type EnhancedQuestion, type QuestionOption, type TodoUpdate } from '@alexnetrebskii/hive-agent'
 import { nutritionCounterTools, mainAgentTools, searchFoodTool, logMealTool } from './tools.js'
 
 // Helper to get option label (works with both string and QuestionOption)
@@ -106,6 +106,34 @@ function showProgress(update: ProgressUpdate): void {
   }
 }
 
+// Todo update display helper
+function showTodoUpdate(update: TodoUpdate): void {
+  const agentLabel = update.agentName ? `[${update.agentName}]` : '[Main]'
+  const actionEmoji = update.action === 'set' ? '📋' : update.action === 'complete' ? '✅' : '🔄'
+
+  console.log(`\n${actionEmoji} ${agentLabel} Todo ${update.action}:`)
+
+  // Show progress
+  const { completed, total, inProgress } = update.progress
+  console.log(`   Progress: ${completed}/${total} completed${inProgress > 0 ? `, ${inProgress} in progress` : ''}`)
+
+  // Show current task if any
+  if (update.current) {
+    const label = update.current.activeForm || update.current.content
+    console.log(`   Current: ${label}`)
+  }
+
+  // Show task list
+  if (update.todos.length > 0) {
+    update.todos.forEach(todo => {
+      const icon = todo.status === 'completed' ? '✅' :
+                   todo.status === 'in_progress' ? '🔄' : '⬜'
+      console.log(`   ${icon} ${todo.content}`)
+    })
+  }
+  console.log('')
+}
+
 // Create logger with progress support and tool debugging
 function createProgressLogger() {
   const base = new ConsoleLogger({ level: 'warn', prefix: '[Eating]' })
@@ -115,6 +143,8 @@ function createProgressLogger() {
     warn: base.warn.bind(base),
     error: base.error.bind(base),
     onProgress: showProgress,
+    // Show todo list updates in real-time
+    onTodoUpdate: showTodoUpdate,
     // Show tool inputs and outputs for debugging
     onToolCall: (toolName: string, params: unknown) => {
       if (toolName.startsWith('context_')) {

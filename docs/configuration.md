@@ -191,7 +191,8 @@ const customLogger = {
   onToolResult: (name, result, durationMs) => { /* ... */ },
   onIteration: (iteration, messageCount) => { /* ... */ },
   onComplete: (result) => { /* ... */ },
-  onProgress: (update) => { /* ... */ }
+  onProgress: (update) => { /* ... */ },
+  onTodoUpdate: (update) => { /* ... */ }  // Todo list changes
 }
 ```
 
@@ -225,6 +226,96 @@ const logger = {
     }
   }
 }
+```
+
+## Todo Updates
+
+Real-time notifications when agents create or update their todo lists.
+
+```typescript
+interface TodoUpdate {
+  agentName?: string    // undefined for main agent, set for sub-agents
+  action: 'set' | 'complete' | 'update'
+  todos: TodoItem[]     // Full list of todos
+  current?: TodoItem    // Currently active task
+  progress: TodoProgress
+}
+
+interface TodoProgress {
+  total: number
+  completed: number
+  pending: number
+  inProgress: number
+}
+
+interface TodoItem {
+  id: string
+  content: string       // Task description (imperative form)
+  activeForm?: string   // Present continuous form for display
+  status: 'pending' | 'in_progress' | 'completed'
+  createdAt: number
+  completedAt?: number
+}
+```
+
+### Example: Display Todo Updates
+
+```typescript
+import type { TodoUpdate } from '@alexnetrebskii/hive-agent'
+
+const logger = {
+  ...new ConsoleLogger({ level: 'warn' }),
+
+  onTodoUpdate: (update: TodoUpdate) => {
+    // Identify which agent (main or sub-agent)
+    const agent = update.agentName || 'Main'
+
+    console.log(`\n[${agent}] Todo ${update.action}:`)
+    console.log(`  Progress: ${update.progress.completed}/${update.progress.total}`)
+
+    if (update.current) {
+      console.log(`  Current: ${update.current.activeForm || update.current.content}`)
+    }
+
+    // Display all tasks
+    update.todos.forEach(todo => {
+      const icon = todo.status === 'completed' ? '✅' :
+                   todo.status === 'in_progress' ? '🔄' : '⬜'
+      console.log(`  ${icon} ${todo.content}`)
+    })
+  }
+}
+```
+
+### Example Output
+
+When a sub-agent creates a todo list:
+
+```
+[meal_planner] Todo set:
+  Progress: 0/4
+  Current: Reading user preferences
+  🔄 Reading user preferences
+  ⬜ Asking about calorie target
+  ⬜ Creating meal plan
+  ⬜ Saving plan to context
+
+[meal_planner] Todo complete:
+  Progress: 1/4
+  Current: Asking about calorie target
+  ✅ Reading user preferences
+  🔄 Asking about calorie target
+  ⬜ Creating meal plan
+  ⬜ Saving plan to context
+```
+
+Main agent updates show `agentName: undefined`:
+
+```
+[Main] Todo set:
+  Progress: 0/2
+  🔄 Processing user request
+  ⬜ Presenting results
 ```
 
 ## Environment Variables

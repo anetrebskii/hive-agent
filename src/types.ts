@@ -182,6 +182,9 @@ export interface LogProvider {
 
   /** Called with progress updates for real-time UI feedback */
   onProgress?(update: ProgressUpdate): void
+
+  /** Called when todo list is created or updated */
+  onTodoUpdate?(update: TodoUpdate): void
 }
 
 export interface RepositoryProvider {
@@ -341,6 +344,26 @@ export interface TodoItem {
 export interface TodoList {
   items: TodoItem[]
   currentTaskId?: string
+}
+
+export interface TodoProgress {
+  total: number
+  completed: number
+  pending: number
+  inProgress: number
+}
+
+export interface TodoUpdate {
+  /** Agent name (undefined for main agent, set for sub-agents) */
+  agentName?: string
+  /** Action that triggered the update */
+  action: 'set' | 'complete' | 'update'
+  /** Full list of todos */
+  todos: TodoItem[]
+  /** Currently active task (if any) */
+  current?: TodoItem
+  /** Progress statistics */
+  progress: TodoProgress
 }
 
 // ============================================================================

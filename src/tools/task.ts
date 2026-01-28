@@ -14,6 +14,7 @@ import type {
   ToolResult,
   ProgressUpdate,
   LogProvider,
+  TodoUpdate,
 } from "../types.js";
 import { TraceBuilder } from "../trace.js";
 import { OUTPUT_TOOL_NAME, createOutputTool } from "./output.js";
@@ -97,6 +98,13 @@ function createSubLogger(
       parentLogger.onProgress?.({
         ...update,
         message: `[${agentName}] ${update.message}`,
+      });
+    },
+    onTodoUpdate: (update: TodoUpdate) => {
+      // Forward sub-agent todo updates with agent name set
+      parentLogger.onTodoUpdate?.({
+        ...update,
+        agentName: agentName,
       });
     },
   };
