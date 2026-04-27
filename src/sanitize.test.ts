@@ -99,4 +99,21 @@ describe('defaultSanitize', () => {
     const input = 'thought<|channel>final<|message|>Recorded an apple'
     expect(defaultSanitize(input)).toBe('Recorded an apple')
   })
+
+  it('strips two-line reasoning preamble from issue #22', () => {
+    const input =
+      'thought\n探测\nThe meeting is scheduled for 3pm.\n\nLet me know if that works for you.'
+    expect(defaultSanitize(input)).toBe(
+      'The meeting is scheduled for 3pm.\n\nLet me know if that works for you.'
+    )
+  })
+
+  it('strips preamble even when separated by a blank line', () => {
+    expect(defaultSanitize('thought\n\n探测\nHello')).toBe('Hello')
+    expect(defaultSanitize('thought\n探测\n\nHello')).toBe('Hello')
+  })
+
+  it('strips preamble hidden behind a leading blank line', () => {
+    expect(defaultSanitize('\n\nthought\n探测\nHello')).toBe('Hello')
+  })
 })

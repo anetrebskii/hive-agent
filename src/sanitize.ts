@@ -17,10 +17,12 @@ const REASONING_BLOCK_RE =
 
 // Generic reasoning-preamble rule (issue #18): first line is a short single
 // token — no whitespace, ≤ 10 chars, no sentence-ending punctuation — followed
-// by a newline and more content. Matches English (`thought`), CJK single-char
-// labels (`探`, `思考`), etc. without maintaining a per-language allow-list.
+// by one or more newlines and more content. Matches English (`thought`), CJK
+// single-char labels (`探`, `思考`), etc. without maintaining a per-language
+// allow-list. Allowing `(?:\r?\n)+` strips a preamble even when the model
+// emits a blank line between the label and the answer (issue #22).
 const LEADING_PREAMBLE_RE =
-  /^[\t ]*[^\s.!?。！？]{1,10}[\t ]*[:：]?[\t ]*\r?\n/
+  /^[\t ]*[^\s.!?。！？]{1,10}[\t ]*[:：]?[\t ]*(?:\r?\n)+/
 
 // Short punctuation preamble the model sometimes emits after the channel
 // header is stripped (`--Well...`, `—`, `...`). Real content does not begin
@@ -31,6 +33,9 @@ export function defaultSanitize(text: string): string {
   let out = text.replace(REASONING_BLOCK_RE, '')
   out = out.replace(CHANNEL_HEADER_RE, '')
   out = out.replace(STRAY_MARKER_RE, '')
+  // Strip leading whitespace before checking the preamble so a leading
+  // blank line doesn't hide a `thought\n…` label from the regex.
+  out = out.replace(/^\s+/, '')
   while (LEADING_PREAMBLE_RE.test(out)) {
     out = out.replace(LEADING_PREAMBLE_RE, '')
   }
