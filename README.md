@@ -52,7 +52,7 @@ Tuplet gives you exactly that. A powerful, multi-agent framework you plug into y
 ### Multi-Provider
 
 - **Claude** (Anthropic) — First-class support with caching and extended thinking
-- **OpenAI** — GPT-4o and other models
+- **OpenAI** — GPT-4o and other models, plus one-call presets for OpenAI-compatible vendors (Groq, Together, Fireworks, DeepSeek, xAI, Ollama)
 - **OpenRouter** — Access to 100+ models via [openrouter.ai](https://openrouter.ai), with optimized prompts so non-Claude models use built-in tools effectively
 - **Custom providers** — Implement the `LLMProvider` interface to use any AI model
 
@@ -119,6 +119,22 @@ const agent = new Tuplet({
 const result = await agent.run('Hello!')
 console.log(result.response)
 ```
+
+### Using OpenAI-compatible providers
+
+`OpenAIProvider` works with OpenAI directly and with any OpenAI-compatible vendor — Groq, Together, Fireworks, DeepSeek, xAI — via static presets that fill in `baseURL`, the env-var fallback, and a default model:
+
+```typescript
+import { Tuplet, OpenAIProvider } from 'tuplet'
+
+const agent = new Tuplet({
+  role: 'a helpful assistant',
+  tools: [myTool],
+  llm: OpenAIProvider.groq({ model: 'llama-3.3-70b-versatile' })  // reads GROQ_API_KEY
+})
+```
+
+For other compatible vendors pass `baseURL` and `vendor` directly. See [Providers](./docs/providers.md) for the full list.
 
 ## Examples
 

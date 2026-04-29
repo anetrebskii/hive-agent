@@ -41,8 +41,8 @@ const useWorkspace =
 
 /** Host-provided context passed to PromptSections and HistoryInjections */
 interface EatingCtx {
-  isAdmin: boolean
-  locale: 'en' | 'ru'
+  isAdmin: boolean;
+  locale: "en" | "ru";
 }
 
 // Helper to get option label (works with both string and QuestionOption)
@@ -271,13 +271,24 @@ async function main() {
 
   const llmProvider = new FallbackProvider({
     providers: [
-      new OpenRouterProvider({ ...openRouterConfig, model: "google/gemma-4-26b-a4b-it:free" }),
-      new OpenRouterProvider({ ...openRouterConfig, model: "google/gemma-4-26b-a4b-it" }),
-      new OpenRouterProvider({ ...openRouterConfig, model: "qwen/qwen3.5-27b" }),      
+      new OpenRouterProvider({
+        ...openRouterConfig,
+        model: "google/gemma-4-26b-a4b-it:free",
+      }),
+      new OpenRouterProvider({
+        ...openRouterConfig,
+        model: "google/gemma-4-26b-a4b-it",
+      }),
+      new OpenRouterProvider({
+        ...openRouterConfig,
+        model: "qwen/qwen3.5-27b",
+      }),
     ],
     onFallback: (error, fromIndex, toIndex) => {
       const message = error instanceof Error ? error.message : String(error);
-      console.warn(`[fallback] provider ${fromIndex} -> ${toIndex}: ${message}`);
+      console.warn(
+        `[fallback] provider ${fromIndex} -> ${toIndex}: ${message}`,
+      );
     },
   });
 
@@ -353,8 +364,10 @@ async function main() {
   const skills: SkillConfig[] = [
     {
       name: "collect_user_profile",
-      description: "Collect user profile: goals, body metrics, allergies, activity level",
-      whenToUse: "New user, first conversation, or user says 'настрой меня' / 'мои данные' / 'set up my profile'",
+      description:
+        "Collect user profile: goals, body metrics, allergies, activity level",
+      whenToUse:
+        "New user, first conversation, or user says 'настрой меня' / 'мои данные' / 'set up my profile'",
       prompt: `Collect the user's nutrition profile step by step using __ask_user__.
 
 Ask these questions (one at a time or grouped logically):
@@ -377,8 +390,10 @@ Be encouraging and supportive throughout.`,
     },
     {
       name: "log_meal",
-      description: "Log what the user ate with nutrition data from OpenFoodFacts",
-      whenToUse: "User mentions eating or drinking something (e.g., 'I had pasta', 'ate an apple', 'drank coffee')",
+      description:
+        "Log what the user ate with nutrition data from OpenFoodFacts",
+      whenToUse:
+        "User mentions eating or drinking something (e.g., 'I had pasta', 'ate an apple', 'drank coffee')",
       prompt: `Log the user's meal with accurate nutrition data.
 
 Steps:
@@ -397,8 +412,10 @@ Always be encouraging. Never judge food choices. If something is high-calorie, j
     },
     {
       name: "create_meal_plan",
-      description: "Create a personalized multi-day meal plan with calorie and macro targets",
-      whenToUse: "User asks to plan meals, build a menu, or 'составь план питания' / 'plan my meals'",
+      description:
+        "Create a personalized multi-day meal plan with calorie and macro targets",
+      whenToUse:
+        "User asks to plan meals, build a menu, or 'составь план питания' / 'plan my meals'",
       prompt: `Create a meal plan for the user and save it to workspace.
 
 Steps:
@@ -428,7 +445,8 @@ Rules:
     {
       name: "analyze_day",
       description: "Analyze daily nutrition totals and give recommendations",
-      whenToUse: "User asks for daily summary, analysis, recommendations, or 'how am I doing today'",
+      whenToUse:
+        "User asks for daily summary, analysis, recommendations, or 'how am I doing today'",
       prompt: `Analyze the user's nutrition for today.
 
 Steps:
@@ -456,7 +474,7 @@ Keep the tone supportive and practical.`,
   const sections: PromptSection<EatingCtx>[] = [
     {
       name: "admin-capabilities",
-      when: ctx => ctx.context.isAdmin,
+      when: (ctx) => ctx.context.isAdmin,
       content:
         "The current user is an administrator. You MAY help them reset " +
         "workspace data or inspect raw JSON on request. Mention that these " +
@@ -467,7 +485,7 @@ Keep the tone supportive and practical.`,
   const historyInjections: HistoryInjection<EatingCtx>[] = [
     {
       name: "opening-turn-warmup",
-      when: ctx => ctx.turnIndex === 1,
+      when: (ctx) => ctx.turnIndex === 1,
       content:
         "This is the first turn of the conversation. Open with a short, " +
         "warm greeting acknowledging the person before jumping into food " +
@@ -494,12 +512,12 @@ Keep the tone supportive and practical.`,
         sessionId: conversationId,
         userId: process.env.USER ?? "local",
         tags: ["eating-consultant"],
-      })
+      }),
     );
   }
   const traceProvider = new MultiTraceProvider(childProviders);
   console.log(
-    `Tracing: console${useLangfuse ? " + Langfuse" : ""} (via MultiTraceProvider)`
+    `Tracing: console${useLangfuse ? " + Langfuse" : ""} (via MultiTraceProvider)`,
   );
 
   // Flush any buffered trace events before the process exits.
@@ -525,7 +543,7 @@ Keep the tone supportive and practical.`,
     repository,
     sections,
     historyInjections,
-    allowedUrls: ['https://*.openfoodfacts.org/**'],
+    allowedUrls: ["https://*.openfoodfacts.org/**"],
     logger: createProgressLogger(),
     maxIterations: 15,
     trace: traceProvider,
@@ -617,12 +635,18 @@ Keep the tone supportive and practical.`,
       console.error("\n❌ Error:", greeting.error, "\n");
     } else {
       console.log("\nAssistant:", greeting.response, "\n");
-      if (greeting.firedPromptSections && greeting.firedPromptSections.length > 0) {
+      if (
+        greeting.firedPromptSections &&
+        greeting.firedPromptSections.length > 0
+      ) {
         console.log(
           `🧩 Active prompt sections: ${greeting.firedPromptSections.join(", ")}\n`,
         );
       }
-      if (greeting.firedHistoryInjections && greeting.firedHistoryInjections.length > 0) {
+      if (
+        greeting.firedHistoryInjections &&
+        greeting.firedHistoryInjections.length > 0
+      ) {
         console.log(
           `💬 Fired history injections: ${greeting.firedHistoryInjections.join(", ")}\n`,
         );
@@ -747,14 +771,20 @@ Keep the tone supportive and practical.`,
         }
 
         // Show fired prompt sections (active set for the session)
-        if (finalResult.firedPromptSections && finalResult.firedPromptSections.length > 0) {
+        if (
+          finalResult.firedPromptSections &&
+          finalResult.firedPromptSections.length > 0
+        ) {
           console.log(
             `\n🧩 Active prompt sections: ${finalResult.firedPromptSections.join(", ")}`,
           );
         }
 
         // Show fired history injections (delta for this run)
-        if (finalResult.firedHistoryInjections && finalResult.firedHistoryInjections.length > 0) {
+        if (
+          finalResult.firedHistoryInjections &&
+          finalResult.firedHistoryInjections.length > 0
+        ) {
           console.log(
             `\n💬 Fired history injections: ${finalResult.firedHistoryInjections.join(", ")}`,
           );

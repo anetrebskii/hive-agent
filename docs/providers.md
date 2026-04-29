@@ -34,6 +34,60 @@ const provider = new OpenAIProvider({
 })
 ```
 
+### OpenAI options
+
+| Option | Default | Purpose |
+| --- | --- | --- |
+| `apiKey` | `process.env.OPENAI_API_KEY` | API key. Vendor presets fall back to vendor-specific env vars (`GROQ_API_KEY`, `TOGETHER_API_KEY`, etc.). |
+| `model` | `gpt-4o` | Model identifier. Vendor presets set sensible defaults (e.g. `llama-3.3-70b-versatile` for Groq). |
+| `baseURL` | `https://api.openai.com/v1` | Chat-completions endpoint root — set by presets, override for Azure / proxies. |
+| `vendor` | `openai` | Namespace for `getModelId()` (`${vendor}:${model}`). Cost-pricing tables and trace events key off this. |
+| `stripReasoning` | `true` | Strip reasoning-channel artifacts (`<\|channel\|>`, leading `thought\n`) from text content. Set `false` to render the reasoning stream yourself. |
+| `defaultHeaders` | `{}` | Extra headers merged into every request — for vendors that need a custom one. |
+| `maxTokens` | `4096` | Generation cap forwarded as `max_tokens`. |
+
+### Sampling parameters per call
+
+`temperature`, `topP`, and `stopSequences` on `LLMOptions` are forwarded to the request body. Other providers ignore them today.
+
+```typescript
+const result = await agent.run('Summarise', {
+  llmOptions: { temperature: 0.2, topP: 0.9, stopSequences: ['\n\n'] }
+})
+```
+
+### OpenAI-compatible vendors
+
+Many vendors expose the same `POST /chat/completions` shape. Use the static factories instead of typing base URLs by hand:
+
+```typescript
+import { OpenAIProvider } from 'tuplet'
+
+OpenAIProvider.groq({ model: 'llama-3.3-70b-versatile' })       // GROQ_API_KEY
+OpenAIProvider.together({ model: 'meta-llama/Llama-3.3-70B-Instruct-Turbo' })  // TOGETHER_API_KEY
+OpenAIProvider.fireworks({ model: 'accounts/fireworks/models/llama-v3p3-70b-instruct' })  // FIREWORKS_API_KEY
+OpenAIProvider.deepseek({ model: 'deepseek-chat' })             // DEEPSEEK_API_KEY
+OpenAIProvider.xai({ model: 'grok-2' })                          // XAI_API_KEY
+OpenAIProvider.ollama({ model: 'llama3.2' })                     // local, OLLAMA_HOST
+```
+
+Each preset sets `baseURL`, the `vendor` namespace for `getModelId()`, the env-var fallback for `apiKey`, and a sensible default model. Anything you pass in `config` overrides the preset.
+
+`OpenAIProvider.ollama()` is the local-development case: no API key needed, default `baseURL` is `http://localhost:11434/v1`, and `OLLAMA_HOST` is honoured (gets `/v1` appended if missing). `model` is required — pick whichever model you've pulled.
+
+For any other OpenAI-compatible vendor, pass `baseURL` and `vendor` directly:
+
+```typescript
+new OpenAIProvider({
+  apiKey: process.env.MOONSHOT_API_KEY,
+  baseURL: 'https://api.moonshot.cn/v1',
+  vendor: 'moonshot',
+  model: 'moonshot-v1-128k'
+})
+```
+
+`OpenRouterProvider` is a separate gateway and stays the right choice when you want OpenRouter's routing, caching breakpoints, and fuzzy-retry behaviour.
+
 ## OpenRouter
 
 [OpenRouter](https://openrouter.ai) is a gateway to hundreds of models. The dedicated `OpenRouterProvider` adds prompt-caching breakpoints, provider routing, fuzzy-response retries, and a request-log hook on top of the OpenAI-compatible API.

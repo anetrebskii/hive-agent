@@ -158,6 +158,12 @@ export interface CacheUsage {
 
 export interface LLMOptions {
   model?: string
+  /** Sampling temperature (0–2 typical). Forwarded to providers that accept it. */
+  temperature?: number
+  /** Nucleus-sampling cutoff (0–1). Forwarded to providers that accept it. */
+  topP?: number
+  /** Stop sequences — generation halts when any is produced. */
+  stopSequences?: string[]
 }
 
 export interface LLMProvider {
