@@ -607,13 +607,30 @@ export async function executeLoop(
       }
 
       // Find the tool — reject hallucinated tool calls early
-      const tool = tools.find(t => t.name === toolUse.name)
+      let tool = tools.find(t => t.name === toolUse.name)
+
+      // Deferred tool called directly without a prior __tool_search__ (some models,
+      // e.g. Gemini, skip the search-first protocol). Promote it and run it instead
+      // of failing — matches the history pre-promotion courtesy.
+      if (!tool) {
+        const deferred = deferredToolMap.get(toolUse.name)
+        if (deferred) {
+          tool = deferred
+          if (!toolSchemas.some(s => s.name === deferred.name)) {
+            tools.push(deferred)
+            toolSchemas = [...toolSchemas, { name: deferred.name, description: deferred.description, input_schema: deferred.parameters }]
+          }
+        }
+      }
 
       if (!tool) {
+        const error = deferredToolMap.size > 0
+          ? `Unknown tool: ${toolUse.name}. If you expected this tool to exist, find it with ${TOOL_SEARCH_NAME} and try again.`
+          : `Unknown tool: ${toolUse.name}`
         toolResults.push({
           type: 'tool_result',
           tool_use_id: toolUse.id,
-          content: JSON.stringify({ success: false, error: `Unknown tool: ${toolUse.name}` }),
+          content: JSON.stringify({ success: false, error }),
           is_error: true
         })
         continue
