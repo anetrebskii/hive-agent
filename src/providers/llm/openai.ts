@@ -396,6 +396,20 @@ export class OpenAIProvider implements LLMProvider {
   }
 
   /**
+   * Google Gemini exposes an OpenAI-compatible endpoint. Model names match the
+   * `google:` cost-pricing keys (`gemini-2.5-flash`, `gemini-2.5-pro`, ...).
+   */
+  static google(config: OpenAIProviderConfig = {}): OpenAIProvider {
+    return new OpenAIProvider({
+      ...config,
+      apiKey: config.apiKey || process.env.GEMINI_API_KEY || process.env.GOOGLE_API_KEY,
+      baseURL: config.baseURL || 'https://generativelanguage.googleapis.com/v1beta/openai',
+      vendor: config.vendor || 'google',
+      model: config.model || 'gemini-2.5-flash'
+    })
+  }
+
+  /**
    * Ollama exposes an OpenAI-compatible endpoint at `<host>/v1/chat/completions`.
    * Auth is unused — Ollama ignores the bearer token but the OpenAI client
    * requires a non-empty Authorization header, so we stub one.

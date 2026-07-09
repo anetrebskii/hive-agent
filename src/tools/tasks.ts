@@ -597,16 +597,36 @@ function notifyTaskUpdate(
 export function createTaskCreateTool(manager: TaskManager, options: TaskToolOptions = {}): Tool {
   return {
     name: "TaskCreate",
-    description: `Create a task in the task list. Duplicates are automatically rejected.
+    description: `Create a task in the task list. Use this to track progress on multi-step work. Duplicates are automatically rejected.
+
+## When to Use
+
+Use proactively when:
+- The request requires 3+ distinct steps
+- The user provides multiple items to accomplish
+- You are starting work after receiving new instructions — capture requirements as tasks BEFORE starting
+- After completing a task — add follow-up tasks discovered during implementation
+
+Do NOT use when:
+- Single, trivial task (just do it)
+- Purely informational or conversational request
+- Less than 3 steps needed
+
+## Creating Good Tasks
+
+- Create ALL tasks upfront before starting any work
+- Each task = one logical unit of work, not one per file
+- Include implicit steps: testing, building, verification
+- Provide both subject (imperative) and activeForm (present continuous)
+- Include enough context in description for the task to be self-contained
 
 ## Fields
 
-- **subject**: Brief, actionable title in imperative form (e.g., "Fix authentication bug")
+- **subject**: Brief, actionable title in imperative form (e.g., "Fix authentication bug in login flow")
 - **description**: What needs to be done, including context and acceptance criteria
-- **activeForm**: Present continuous form shown in spinner when in_progress (e.g., "Fixing authentication bug")
+- **activeForm**: Present continuous form shown in spinner when in_progress (e.g., "Fixing authentication bug"). Always provide this.
 
-Always provide activeForm. Tasks are created with status \`pending\` (first task auto-starts).
-`,
+Tasks start as \`pending\`. First task auto-starts as \`in_progress\`. Duplicates are rejected.`,
     parameters: {
       type: "object",
       properties: {
@@ -867,12 +887,21 @@ Only mark completed when fully done. If blocked, keep as in_progress.
       if (status === 'completed') {
         message = `Completed task #${taskId}: "${result.task.subject}"`;
         if (result.next) {
-          message += `. Next: #${result.next.id} "${result.next.subject}"`;
+          message += `\nNext task: #${result.next.id} "${result.next.subject}" (auto-started). Begin working on it now.`;
         } else if (manager.isAllCompleted()) {
-          message += `. All tasks completed!`;
+          const allTasks = manager.getAll();
+          const hasVerification = allTasks.some(t =>
+            /verif|test|build|lint|check|run.*test/i.test(t.subject)
+          );
+          if (allTasks.length >= 3 && !hasVerification) {
+            message += `\nAll tasks completed — but none was a verification step. Create a verification task (run tests, build, or lint) before responding to the user.`;
+          } else {
+            message += `\nAll tasks completed! Respond to the user with a summary of what was done.`;
+          }
         }
       } else if (status === 'in_progress') {
         message = `Started task #${taskId}: "${result.task.subject}"`;
+        message += `\nDo the work, then mark this task completed with TaskUpdate before moving on.`;
       }
 
       return {
@@ -930,7 +959,17 @@ export function createTaskGetTool(manager: TaskManager, _options: TaskToolOption
 export function createTaskListTool(manager: TaskManager, options: TaskToolOptions = {}): Tool {
   return {
     name: "TaskList",
-    description: `List all tasks with their ID, subject, status, and owner. Use after completing a task to find the next one.`,
+    description: `List all tasks with ID, subject, status, owner, and blockers.
+
+Use after completing a task to find the next available one.
+Prefer tasks in ID order (lowest first) — earlier tasks often set up context for later ones.
+
+## Output
+- id: Task identifier
+- subject: Brief description
+- status: pending, in_progress, or completed
+- owner: Agent name if assigned, empty if available
+- blockedBy: Open task IDs that must complete first (resolved blockers are hidden)`,
     parameters: {
       type: "object",
       properties: {},

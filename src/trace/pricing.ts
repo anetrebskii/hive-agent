@@ -19,6 +19,15 @@ export const DEFAULT_MODEL_PRICING: Record<string, ModelPricing> = {
   'openai:gpt-4o': { inputPer1M: 2.50, outputPer1M: 10.00 },
   'openai:gpt-4o-mini': { inputPer1M: 0.15, outputPer1M: 0.60 },
   'openai:gpt-4-turbo': { inputPer1M: 10.00, outputPer1M: 30.00 },
+  // Google Gemini models (direct API, OpenAI-compatible endpoint; base tier list prices)
+  'google:gemini-2.5-pro': { inputPer1M: 1.25, outputPer1M: 10.00, cacheReadPer1M: 0.31 },
+  'google:gemini-2.5-flash': { inputPer1M: 0.30, outputPer1M: 2.50, cacheReadPer1M: 0.075 },
+  'google:gemini-2.5-flash-lite': { inputPer1M: 0.10, outputPer1M: 0.40, cacheReadPer1M: 0.025 },
+  'google:gemini-2.0-flash': { inputPer1M: 0.10, outputPer1M: 0.40, cacheReadPer1M: 0.025 },
+  'google:gemini-2.0-flash-lite': { inputPer1M: 0.075, outputPer1M: 0.30 },
+  'google:gemini-1.5-pro': { inputPer1M: 1.25, outputPer1M: 5.00, cacheReadPer1M: 0.3125 },
+  'google:gemini-1.5-flash': { inputPer1M: 0.075, outputPer1M: 0.30, cacheReadPer1M: 0.01875 },
+  'google:gemini-1.5-flash-8b': { inputPer1M: 0.0375, outputPer1M: 0.15, cacheReadPer1M: 0.01 },
   // OpenRouter models (auto-generated, see openrouter-pricing.ts)
   ...OPENROUTER_MODEL_PRICING,
 }
