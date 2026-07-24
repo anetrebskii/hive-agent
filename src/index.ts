@@ -276,6 +276,22 @@ export {
 // Built-in Agents
 export { exploreAgent, planAgent, getBuiltInAgents } from './built-in-agents/index.js'
 
+// MCP (Model Context Protocol) client
+export {
+  McpManager,
+  McpConnection,
+  McpHttpClient,
+  parseSseMessages,
+  sanitizeToolName,
+  normalizeSchema,
+  flattenContent,
+  type McpServerConfig,
+  type McpServerInfo,
+  type FetchLike,
+  type McpToolDef,
+  type McpCallResult
+} from './mcp/index.js'
+
 // Dataset (Run Recording, Replay & Testing)
 export {
   RunRecorder,

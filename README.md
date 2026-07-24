@@ -48,6 +48,7 @@ Tuplet gives you exactly that. A powerful, multi-agent framework you plug into y
 - **Web browsing** — Navigate websites, extract data, interact with pages
 - **API requests with authentication** — Make HTTP requests to external services
 - **URL allowlisting** — Restrict which URLs the agent can access via `curl`/`browse` with wildcard patterns (`https://*.example.com/api/**`)
+- **MCP client** — Connect existing remote MCP servers (HubSpot, Close CRM, Google Calendar, ...) and expose their tools to the agent. Zero-dependency Streamable HTTP client — no SDK required. See [docs/mcp.md](docs/mcp.md)
 
 ### Multi-Provider
 
@@ -145,6 +146,7 @@ For other compatible vendors pass `baseURL` and `vendor` directly. See [Provider
 
 - [Quick Start](https://github.com/anetrebskii/tuplet/blob/main/docs/README.md)
 - [Tools](https://github.com/anetrebskii/tuplet/blob/main/docs/tools.md)
+- [MCP Servers](https://github.com/anetrebskii/tuplet/blob/main/docs/mcp.md)
 - [Skills](https://github.com/anetrebskii/tuplet/blob/main/docs/skills.md)
 - [Sub-Agents](https://github.com/anetrebskii/tuplet/blob/main/docs/sub-agents.md)
 - [Workspace](https://github.com/anetrebskii/tuplet/blob/main/docs/workspace.md)
