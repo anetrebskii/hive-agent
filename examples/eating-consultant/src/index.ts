@@ -21,6 +21,8 @@ import {
   Workspace,
   FileWorkspaceProvider,
   RunRecorder,
+  McpManager,
+  type Tool,
   type Message,
   type SkillConfig,
   type ProgressUpdate,
@@ -254,6 +256,42 @@ async function main() {
   const logDir = process.env.OPENROUTER_LOG_DIR ?? "./openrouter-logs";
   mkdirSync(logDir, { recursive: true });
   let logCounter = 0;
+
+  // --- MCP server (optional) ---
+  // Connect a remote MCP server configured via .env. Example (HubSpot):
+  //   MCP_NAME=hubspot
+  //   MCP_URL=https://mcp.hubspot.com
+  //   MCP_AUTH=Bearer <token>           -> sent as the Authorization header
+  //   MCP_DESCRIPTION=HubSpot CRM
+  //   MCP_SCOPE=mcp.read                -> sent as Close-Scope (Close CRM only)
+  //   MCP_HEADERS={"X-Extra":"1"}       -> optional extra headers (JSON)
+  let mcp: McpManager | null = null;
+  let mcpTools: Tool[] = [];
+  let mcpSection = "";
+  if (process.env.MCP_URL) {
+    const headers: Record<string, string> = {};
+    if (process.env.MCP_AUTH) headers["Authorization"] = process.env.MCP_AUTH;
+    if (process.env.MCP_SCOPE) headers["Close-Scope"] = process.env.MCP_SCOPE;
+    if (process.env.MCP_HEADERS) Object.assign(headers, JSON.parse(process.env.MCP_HEADERS));
+    mcp = new McpManager([
+      {
+        name: process.env.MCP_NAME ?? "mcp",
+        url: process.env.MCP_URL,
+        description: process.env.MCP_DESCRIPTION,
+        headers,
+      },
+    ]);
+    try {
+      await mcp.connect();
+      mcpTools = mcp.getTools();
+      mcpSection = mcp.getPromptSection();
+      const info = mcp.getServerInfo()[0];
+      console.log(`MCP: connected to "${info.name}" — ${info.toolCount} tools`);
+    } catch (err) {
+      console.error(`MCP: failed to connect — ${err instanceof Error ? err.message : String(err)}`);
+      mcp = null;
+    }
+  }
 
   // Try the free Gemma tier first; fall back to the paid one when the free
   // tier is rate-limited, overloaded, or returns a transient error. Cost
@@ -523,6 +561,7 @@ Keep the tone supportive and practical.`,
   // Flush any buffered trace events before the process exits.
   const shutdownTracing = async () => {
     await traceProvider.shutdown();
+    if (mcp) await mcp.close();
   };
   process.on("beforeExit", shutdownTracing);
   process.on("SIGINT", async () => {
@@ -535,8 +574,9 @@ Keep the tone supportive and practical.`,
     role:
       "a nutrition consultant that helps users track meals, view nutrition progress, and plan their diet. " +
       "You have skills for specific workflows - activate them when the user's request matches. " +
-      "Present results in a friendly, encouraging way. Use Russian if user speaks Russian.",
-    tools: nutritionCounterTools,
+      "Present results in a friendly, encouraging way. Use Russian if user speaks Russian." +
+      (mcpSection ? `\n\n${mcpSection}` : ""),
+    tools: [...nutritionCounterTools, ...mcpTools],
     skills,
     agents: [],
     llm: llmProvider,

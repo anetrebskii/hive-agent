@@ -3,3 +3,4 @@ dist/
 .env
 runs/
 workspace-data/
+openrouter-logs/
